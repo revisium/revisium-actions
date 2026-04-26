@@ -1,0 +1,19 @@
+name: Check Prerelease Dependencies
+description: Reject prerelease runtime dependencies before stable releases.
+inputs:
+  target-version:
+    description: Release version without leading v. Prerelease versions skip the stable guard.
+    required: false
+    default: ''
+  package-path:
+    description: Package manifest path to inspect.
+    required: false
+    default: package.json
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        TARGET_VERSION: ${{ inputs.target-version }}
+        PACKAGE_PATH: ${{ inputs.package-path }}
+      run: node "$GITHUB_ACTION_PATH/../../bin/check-prerelease-deps.mjs"
