@@ -1,0 +1,27 @@
+{
+  "name": "@revisium/actions",
+  "version": "0.0.0-development",
+  "private": true,
+  "type": "module",
+  "description": "Shared GitHub Actions, reusable workflows, and release automation helpers for Revisium repositories.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.11.1"
+  },
+  "packageManager": "npm@11.11.0",
+  "scripts": {
+    "actionlint": "node scripts/actionlint.mjs .github/workflows/*.yml examples/workflows/*.yml",
+    "docs:check": "node scripts/validate-docs.mjs",
+    "format:check": "prettier . --check",
+    "format:write": "prettier . --write",
+    "lint": "eslint .",
+    "test": "node --test",
+    "validate": "npm run lint && npm run format:check && npm test && npm run actionlint && npm run docs:check"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.2.1",
+    "globals": "^17.5.0",
+    "prettier": "^3.8.3"
+  }
+}

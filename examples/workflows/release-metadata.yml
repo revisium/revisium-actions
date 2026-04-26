@@ -1,0 +1,40 @@
+name: Release Metadata Example
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Target version without leading v.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.11.1
+          cache: npm
+
+      - run: npm ci
+
+      - uses: revisium/revisium-actions/actions/apply-version-metadata@v0
+        with:
+          target-version: ${{ inputs.version }}
+          version-files: |
+            src/api/rest-api/openapi.json
+
+      - uses: revisium/revisium-actions/actions/validate-version-metadata@v0
+        with:
+          target-version: ${{ inputs.version }}
+          version-files: |
+            src/api/rest-api/openapi.json
+
+      - uses: revisium/revisium-actions/actions/check-prerelease-deps@v0
+        with:
+          target-version: ${{ inputs.version }}
