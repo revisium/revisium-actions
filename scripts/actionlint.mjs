@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 
+import { resolveActionlintResult } from '../src/actionlint-result.js';
+
 const args = process.argv.slice(2);
 const result = spawnSync('actionlint', args, { stdio: 'inherit' });
+const resolved = resolveActionlintResult(result);
 
-if (result.error?.code === 'ENOENT') {
-  console.warn('actionlint binary was not found locally.');
-  console.warn('CI runs raven-actions/actionlint against workflows and examples.');
-  process.exit(0);
+for (const warning of resolved.warnings || []) {
+  console.warn(warning);
 }
 
-if (result.error) {
-  throw result.error;
+for (const error of resolved.errors || []) {
+  console.error(error);
 }
 
-process.exit(result.status ?? 0);
+process.exit(resolved.exitCode);

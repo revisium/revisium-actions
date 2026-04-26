@@ -15,11 +15,12 @@
     "format:check": "prettier . --check",
     "format:write": "prettier . --write",
     "lint": "eslint .",
-    "test": "node --test",
+    "test": "c8 --reporter=lcov --reporter=text node --test",
     "validate": "npm run lint && npm run format:check && npm test && npm run actionlint && npm run docs:check"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "c8": "^11.0.0",
     "eslint": "^10.2.1",
     "globals": "^17.5.0",
     "prettier": "^3.8.3"

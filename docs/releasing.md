@@ -38,7 +38,7 @@ Cut `v0.1.0` after the initial repository foundation is ready:
 Run these commands from the repository root:
 
 ```bash
-cd /Users/anton/projects/revisium/revisium-actions
+cd path/to/revisium-actions
 
 npm ci
 npm run validate
@@ -95,7 +95,7 @@ Recommended gate before `v1.0.0`:
 Release commands:
 
 ```bash
-cd /Users/anton/projects/revisium/revisium-actions
+cd path/to/revisium-actions
 
 npm ci
 npm run validate
