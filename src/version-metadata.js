@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -68,15 +67,30 @@ function resolveRepoPath(cwd, relativePath) {
   return path.resolve(cwd, relativePath);
 }
 
+export function updatePackageVersionFiles(cwd, targetVersion) {
+  const packagePath = resolveRepoPath(cwd, 'package.json');
+  const packageLockPath = resolveRepoPath(cwd, 'package-lock.json');
+  const pkg = readJsonFile(packagePath);
+  const lock = readJsonFile(packageLockPath);
+
+  pkg.version = targetVersion;
+  lock.version = targetVersion;
+
+  if (!lock.packages?.['']) {
+    throw new Error('package-lock.json does not contain packages[""] root metadata');
+  }
+  lock.packages[''].version = targetVersion;
+
+  writeJsonFile(packagePath, pkg);
+  writeJsonFile(packageLockPath, lock);
+}
+
 export function applyVersionMetadata({ cwd = process.cwd(), targetVersion, versionFiles = '' }) {
   if (!targetVersion) {
     throw new Error('targetVersion is required');
   }
 
-  execFileSync('npm', ['version', targetVersion, '--no-git-tag-version', '--allow-same-version'], {
-    cwd,
-    stdio: 'inherit',
-  });
+  updatePackageVersionFiles(cwd, targetVersion);
 
   for (const file of splitFileList(versionFiles)) {
     updateJsonVersionFile(resolveRepoPath(cwd, file), targetVersion);

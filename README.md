@@ -1,7 +1,16 @@
+<div align="center">
+
 # revisium-actions
 
 Shared GitHub Actions, reusable workflows, and release automation helpers for
 Revisium repositories.
+
+[![License](https://img.shields.io/github/license/revisium/revisium-actions?color=blue)](LICENSE)
+[![CI](https://github.com/revisium/revisium-actions/actions/workflows/ci.yml/badge.svg)](https://github.com/revisium/revisium-actions/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=revisium_revisium-actions&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=revisium_revisium-actions)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=revisium_revisium-actions&metric=coverage)](https://sonarcloud.io/summary/new_code?id=revisium_revisium-actions)
+
+</div>
 
 ## Current Scope
 

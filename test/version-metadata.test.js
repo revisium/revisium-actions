@@ -11,6 +11,7 @@ import {
   setJsonVersion,
   shouldSkipStableDependencyGuard,
   splitFileList,
+  updatePackageVersionFiles,
   validateVersionMetadata,
 } from '../src/version-metadata.js';
 
@@ -78,6 +79,22 @@ test('applyVersionMetadata and validateVersionMetadata update package and extra 
 
   assert.equal(readJson(path.join(cwd, 'package.json')).version, '1.2.3-alpha.0');
   assert.equal(readJson(path.join(cwd, 'src/openapi.json')).info.version, '1.2.3-alpha.0');
+});
+
+test('updatePackageVersionFiles rejects locks without root metadata', () => {
+  const cwd = tempDir();
+  writeJson(path.join(cwd, 'package.json'), { name: 'fixture', version: '0.0.0' });
+  writeJson(path.join(cwd, 'package-lock.json'), {
+    name: 'fixture',
+    version: '0.0.0',
+    lockfileVersion: 3,
+    packages: {},
+  });
+
+  assert.throws(
+    () => updatePackageVersionFiles(cwd, '1.0.0'),
+    /package-lock\.json does not contain packages\[""\] root metadata/,
+  );
 });
 
 test('validateVersionMetadata rejects mismatched package metadata', () => {
