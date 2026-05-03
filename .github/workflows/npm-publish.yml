@@ -239,7 +239,7 @@ jobs:
             if [[ "v$VERSION" == "$LATEST_STABLE_TAG" ]]; then
               echo "tag=latest" >> "$GITHUB_OUTPUT"
             else
-              IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
+              IFS=. read -r MAJOR MINOR _PATCH <<< "$VERSION"
               echo "tag=release-$MAJOR-$MINOR" >> "$GITHUB_OUTPUT"
             fi
           fi
