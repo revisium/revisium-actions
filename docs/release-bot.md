@@ -35,13 +35,18 @@ release tag must be pushed with the release bot token.
 ## Caller Workflow Pattern
 
 ```yaml
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   release-train:
-    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.0
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.1
     with:
       action: ${{ inputs.action }}
       dry_run: false
-    secrets: inherit
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 ```
 
 The reusable workflow creates a GitHub App installation token from
