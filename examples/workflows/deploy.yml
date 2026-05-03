@@ -17,7 +17,7 @@ permissions:
 jobs:
   deploy:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    uses: revisium/revisium-actions/.github/workflows/deploy.yml@v0.3.1
+    uses: revisium/revisium-actions/.github/workflows/deploy.yml@v0.3.3
     with:
       ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       environment: development

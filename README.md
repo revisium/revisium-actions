@@ -141,7 +141,7 @@ jobs:
 ```yaml
 jobs:
   deploy:
-    uses: revisium/revisium-actions/.github/workflows/deploy.yml@v0.3.1
+    uses: revisium/revisium-actions/.github/workflows/deploy.yml@v0.3.3
     with:
       ref: ${{ github.event.workflow_run.head_sha }}
       kube_namespace: ${{ vars.KUBE_NAMESPACE }}
@@ -149,6 +149,24 @@ jobs:
       kube_app_url: ${{ vars.KUBE_APP_URL }}
     secrets:
       KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+```
+
+Prefer Actions variables for `kube_namespace`, `kube_service_name`, and
+`kube_app_url`. `KUBE_CONFIG` stays secret-only. Legacy repositories that still
+store deployment metadata as secrets can omit those inputs and map fallback
+secrets instead:
+
+```yaml
+jobs:
+  deploy:
+    uses: revisium/revisium-actions/.github/workflows/deploy.yml@v0.3.3
+    with:
+      ref: ${{ github.sha }}
+    secrets:
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      KUBE_NAMESPACE: ${{ secrets.KUBE_NAMESPACE }}
+      KUBE_SERVICE_NAME: ${{ secrets.KUBE_SERVICE_NAME }}
+      KUBE_APP_URL: ${{ secrets.KUBE_APP_URL }}
 ```
 
 ```yaml
@@ -221,5 +239,6 @@ the real actionlint check in a separate job.
 - [Docker build example workflow](examples/workflows/docker-build.yml)
 - [Node build example workflow](examples/workflows/node-build.yml)
 - [Deploy example workflow](examples/workflows/deploy.yml)
+- [Deploy legacy secrets example workflow](examples/workflows/deploy-legacy-secrets.yml)
 - [npm publish example workflow](examples/workflows/npm-publish.yml)
 - [npm publish OIDC example workflow](examples/workflows/npm-publish-oidc.yml)

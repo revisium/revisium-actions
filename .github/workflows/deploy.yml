@@ -19,11 +19,13 @@ on:
         type: string
       kube_namespace:
         description: Kubernetes namespace to restart.
-        required: true
+        required: false
+        default: ''
         type: string
       kube_service_name:
         description: Kubernetes deployment and service name.
-        required: true
+        required: false
+        default: ''
         type: string
       kube_app_url:
         description: Public app URL to attach to the deployment status.
@@ -33,6 +35,12 @@ on:
     secrets:
       KUBE_CONFIG:
         required: true
+      KUBE_NAMESPACE:
+        required: false
+      KUBE_SERVICE_NAME:
+        required: false
+      KUBE_APP_URL:
+        required: false
 
 permissions:
   contents: read
@@ -41,6 +49,10 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      KUBE_NAMESPACE: ${{ inputs.kube_namespace || secrets.KUBE_NAMESPACE }}
+      KUBE_SERVICE_NAME: ${{ inputs.kube_service_name || secrets.KUBE_SERVICE_NAME }}
+      KUBE_APP_URL: ${{ inputs.kube_app_url || secrets.KUBE_APP_URL }}
 
     steps:
       - name: Checkout repository
@@ -97,14 +109,9 @@ jobs:
           echo "KUBECONFIG=/tmp/kubeconfig" >> "$GITHUB_ENV"
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
-          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
-          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
 
       - name: Validate Kubernetes identifiers
         shell: bash
-        env:
-          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
-          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
         run: |
           set -euo pipefail
 
@@ -119,12 +126,12 @@ jobs:
             fi
 
             if ((${#value} > 63)); then
-              echo "$name must be 63 characters or fewer: $value"
+              echo "$name must be 63 characters or fewer"
               exit 1
             fi
 
             if [[ ! "$value" =~ $pattern ]]; then
-              echo "$name must be a valid Kubernetes DNS label: $value"
+              echo "$name must be a valid Kubernetes DNS label"
               exit 1
             fi
           }
@@ -134,27 +141,18 @@ jobs:
 
       - name: Rollout restart deployment
         shell: bash
-        env:
-          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
-          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
         run: |
           set -euo pipefail
           kubectl rollout restart deployment/"$KUBE_SERVICE_NAME" -n "$KUBE_NAMESPACE"
 
       - name: Wait for rollout to complete
         shell: bash
-        env:
-          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
-          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
         run: |
           set -euo pipefail
           kubectl rollout status deployment/"$KUBE_SERVICE_NAME" -n "$KUBE_NAMESPACE" --timeout=300s
 
       - name: Verify deployment
         shell: bash
-        env:
-          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
-          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
         run: |
           set -euo pipefail
           kubectl get pods -n "$KUBE_NAMESPACE" -l "app=$KUBE_SERVICE_NAME"
@@ -163,8 +161,6 @@ jobs:
       - name: Set deployment status to success
         if: success()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          DEPLOYMENT_APP_URL: ${{ inputs.kube_app_url }}
         with:
           script: |
             const deploymentId = Number('${{ steps.deployment.outputs.result }}');
@@ -177,7 +173,7 @@ jobs:
               log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               auto_inactive: true
             };
-            const envUrl = process.env.DEPLOYMENT_APP_URL;
+            const envUrl = process.env.KUBE_APP_URL;
             if (envUrl) {
               status.environment_url = envUrl;
             }
