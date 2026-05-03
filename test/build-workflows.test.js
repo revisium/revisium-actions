@@ -14,6 +14,10 @@ const dockerExample = fs.readFileSync(`${repoRoot}/examples/workflows/docker-bui
 const nodeExample = fs.readFileSync(`${repoRoot}/examples/workflows/node-build.yml`, 'utf8');
 const deployExample = fs.readFileSync(`${repoRoot}/examples/workflows/deploy.yml`, 'utf8');
 const npmPublishExample = fs.readFileSync(`${repoRoot}/examples/workflows/npm-publish.yml`, 'utf8');
+const npmPublishOidcExample = fs.readFileSync(
+  `${repoRoot}/examples/workflows/npm-publish-oidc.yml`,
+  'utf8',
+);
 
 test('README documents the shared build workflow helpers', () => {
   assert.match(readme, /\.github\/workflows\/docker-build\.yml/);
@@ -63,6 +67,7 @@ test('npm publish reusable workflow exposes the publish shape', () => {
   assert.match(npmPublishWorkflow, /package_path/);
   assert.match(npmPublishWorkflow, /pre_publish_commands/);
   assert.match(npmPublishWorkflow, /NPM_ACCESS/);
+  assert.match(npmPublishWorkflow, /publish_auth/);
   assert.match(npmPublishWorkflow, /Create GitHub Release/);
   assert.match(npmPublishWorkflow, /Determine npm tag/);
   assert.match(npmPublishWorkflow, /Publish to npm/);
@@ -77,5 +82,9 @@ test('examples point at the reusable build workflows', () => {
   assert.match(deployExample, /vars\.KUBE_NAMESPACE/);
   assert.match(deployExample, /KUBE_CONFIG/);
   assert.match(npmPublishExample, /npm-publish\.yml@v0\.3\.1/);
+  assert.match(npmPublishExample, /publish_auth: token/);
   assert.match(npmPublishExample, /create_github_release: true/);
+  assert.match(npmPublishOidcExample, /npm-publish\.yml@v0\.3\.1/);
+  assert.match(npmPublishOidcExample, /publish_auth: oidc/);
+  assert.match(npmPublishOidcExample, /npm_access: public/);
 });

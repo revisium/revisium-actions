@@ -160,10 +160,15 @@ jobs:
       install_command: npm ci
       pre_publish_commands: |
         npm run build
+      publish_auth: token
       create_github_release: true
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
+
+Use `publish_auth: oidc` when the package is configured for npm trusted
+publishing. That mode uses GitHub OIDC instead of a long-lived npm token, still
+requires `npm_access: public`, and does not need `NPM_TOKEN`.
 
 ## Example
 
@@ -212,3 +217,4 @@ the real actionlint check in a separate job.
 - [Node build example workflow](examples/workflows/node-build.yml)
 - [Deploy example workflow](examples/workflows/deploy.yml)
 - [npm publish example workflow](examples/workflows/npm-publish.yml)
+- [npm publish OIDC example workflow](examples/workflows/npm-publish-oidc.yml)

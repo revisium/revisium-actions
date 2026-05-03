@@ -1,4 +1,4 @@
-name: npm Publish Example
+name: npm Publish OIDC Example
 
 on:
   push:
@@ -19,7 +19,6 @@ jobs:
       install_command: npm ci
       pre_publish_commands: |
         npm run build
-      publish_auth: token
+      npm_access: public
+      publish_auth: oidc
       create_github_release: true
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
