@@ -35,18 +35,17 @@ release tag must be pushed with the release bot token.
 ## Caller Workflow Pattern
 
 ```yaml
-- name: Create release app token
-  id: app-token
-  uses: actions/create-github-app-token@v3
-  with:
-    client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
-    private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
-    permission-contents: write
-
-- uses: revisium/revisium-actions/actions/create-verified-release-commit@v1.0.0
-  env:
-    GH_TOKEN: ${{ steps.app-token.outputs.token }}
+jobs:
+  release-train:
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.0
+    with:
+      action: ${{ inputs.action }}
+      dry_run: false
+    secrets: inherit
 ```
 
-The verified commit and tag helper actions will be added after the metadata
-helpers are migrated and tested.
+The reusable workflow creates a GitHub App installation token from
+`RELEASE_BOT_CLIENT_ID` and `RELEASE_BOT_PRIVATE_KEY`. It uses the GitHub Git API
+to create the release commit and verifies that GitHub marked the commit as
+verified before creating the release branch and tag. Dry-run jobs can keep
+`dry_run: true`; the GitHub App credentials are required only when publishing.

@@ -12,11 +12,6 @@ on:
         required: false
         default: true
         type: boolean
-      actions_ref:
-        description: revisium-actions ref that provides the helper scripts.
-        required: false
-        default: v0.2.0
-        type: string
       base_branch:
         description: Base branch used by start-* transitions.
         required: false
@@ -47,6 +42,10 @@ on:
         required: false
         default: ''
         type: string
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY:
+        description: GitHub App private key used when dry_run is false.
+        required: false
     outputs:
       target_branch:
         description: Branch that would be created or updated.
@@ -75,10 +74,14 @@ jobs:
     steps:
       - name: Guard write mode
         if: ${{ inputs.dry_run == false }}
+        env:
+          RELEASE_BOT_CLIENT_ID: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
         run: |
-          echo "revisium-actions v0.2.0 release-train workflow only supports dry_run=true."
-          echo "No branch, commit, or tag was pushed."
-          exit 1
+          if [ -z "$RELEASE_BOT_CLIENT_ID" ] || [ -z "$RELEASE_BOT_PRIVATE_KEY" ]; then
+            echo "dry_run=false requires RELEASE_BOT_CLIENT_ID and RELEASE_BOT_PRIVATE_KEY."
+            exit 1
+          fi
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -90,7 +93,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: revisium/revisium-actions
-          ref: ${{ inputs.actions_ref }}
+          ref: ${{ github.workflow_sha }}
           path: .revisium-actions
           persist-credentials: false
 
@@ -99,6 +102,15 @@ jobs:
         with:
           node-version: ${{ inputs.node_version }}
           cache: npm
+
+      - name: Create release app token
+        id: app-token
+        if: ${{ inputs.dry_run == false }}
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          permission-contents: write
 
       - name: Fetch release refs
         run: git fetch origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
@@ -143,9 +155,31 @@ jobs:
           VALIDATE_COMMAND: ${{ inputs.validate_command }}
         run: bash -euo pipefail -c "$VALIDATE_COMMAND"
 
+      - name: Publish release branch and tag
+        id: publish
+        if: ${{ inputs.dry_run == false }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REF_MODE: ${{ steps.release.outputs.ref_mode }}
+          TAG: ${{ steps.release.outputs.tag }}
+          TARGET_BRANCH: ${{ steps.release.outputs.target_branch }}
+          TARGET_VERSION: ${{ steps.release.outputs.target_version }}
+          VERSION_FILES: ${{ inputs.version_files }}
+        run: node .revisium-actions/bin/publish-release.mjs
+
       - name: Dry run summary
+        if: ${{ inputs.dry_run == true }}
         run: |
           echo "Dry run only. No commit, branch, or tag was pushed."
+          echo "Target branch: ${{ steps.release.outputs.target_branch }}"
+          echo "Target version: ${{ steps.release.outputs.target_version }}"
+          echo "Tag: ${{ steps.release.outputs.tag }}"
+          echo "Channel: ${{ steps.release.outputs.channel }}"
+
+      - name: Release summary
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          echo "Release branch and tag were pushed."
           echo "Target branch: ${{ steps.release.outputs.target_branch }}"
           echo "Target version: ${{ steps.release.outputs.target_version }}"
           echo "Tag: ${{ steps.release.outputs.tag }}"

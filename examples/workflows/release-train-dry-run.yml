@@ -32,13 +32,13 @@ permissions:
 
 jobs:
   release-train:
-    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.2.0
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.0
     with:
       action: ${{ inputs.action }}
       dry_run: ${{ inputs.dry_run }}
-      actions_ref: v0.2.0
       node_version: 24.11.1
       install_command: npm ci
       validate_command: |
         npm run typecheck
         npm run build
+    secrets: inherit
