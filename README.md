@@ -120,7 +120,9 @@ jobs:
       image_name: ${{ github.event.repository.name }}
       context: .
       dockerfile: Dockerfile
-    secrets: inherit
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 ```
 
 ```yaml
@@ -142,9 +144,9 @@ jobs:
     uses: revisium/revisium-actions/.github/workflows/deploy.yml@v0.3.1
     with:
       ref: ${{ github.event.workflow_run.head_sha }}
-      kube_namespace: ${{ secrets.KUBE_NAMESPACE }}
-      kube_service_name: ${{ secrets.KUBE_SERVICE_NAME }}
-      kube_app_url: ${{ secrets.KUBE_APP_URL }}
+      kube_namespace: ${{ vars.KUBE_NAMESPACE }}
+      kube_service_name: ${{ vars.KUBE_SERVICE_NAME }}
+      kube_app_url: ${{ vars.KUBE_APP_URL }}
     secrets:
       KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
 ```

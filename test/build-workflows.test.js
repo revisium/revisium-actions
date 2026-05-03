@@ -42,6 +42,7 @@ test('node build reusable workflow exposes the package build shape', () => {
   assert.match(nodeBuild, /install_command/);
   assert.match(nodeBuild, /run_commands/);
   assert.match(nodeBuild, /actions\/setup-node/);
+  assert.match(nodeBuild, /cache-dependency-path/);
   assert.match(nodeBuild, /Running: \$command/);
 });
 
@@ -49,15 +50,19 @@ test('deploy reusable workflow exposes the Kubernetes deployment shape', () => {
   assert.match(deployWorkflow, /workflow_call/);
   assert.match(deployWorkflow, /kube_namespace/);
   assert.match(deployWorkflow, /kube_service_name/);
+  assert.match(deployWorkflow, /DEPLOY_REF/);
+  assert.match(deployWorkflow, /process\.env\.DEPLOY_DESCRIPTION/);
   assert.match(deployWorkflow, /Create GitHub deployment/);
   assert.match(deployWorkflow, /Rollout restart deployment/);
   assert.match(deployWorkflow, /Set deployment status to success/);
+  assert.match(deployWorkflow, /KUBE_SERVICE_NAME/);
 });
 
 test('npm publish reusable workflow exposes the publish shape', () => {
   assert.match(npmPublishWorkflow, /workflow_call/);
   assert.match(npmPublishWorkflow, /package_path/);
   assert.match(npmPublishWorkflow, /pre_publish_commands/);
+  assert.match(npmPublishWorkflow, /NPM_ACCESS/);
   assert.match(npmPublishWorkflow, /Create GitHub Release/);
   assert.match(npmPublishWorkflow, /Determine npm tag/);
   assert.match(npmPublishWorkflow, /Publish to npm/);
@@ -65,10 +70,11 @@ test('npm publish reusable workflow exposes the publish shape', () => {
 
 test('examples point at the reusable build workflows', () => {
   assert.match(dockerExample, /docker-build\.yml@v0\.3\.1/);
-  assert.match(dockerExample, /emit_latest_tag: true/);
+  assert.match(dockerExample, /DOCKERHUB_USERNAME/);
   assert.match(nodeExample, /node-build\.yml@v0\.3\.1/);
   assert.match(nodeExample, /npm run build/);
   assert.match(deployExample, /deploy\.yml@v0\.3\.1/);
+  assert.match(deployExample, /vars\.KUBE_NAMESPACE/);
   assert.match(deployExample, /KUBE_CONFIG/);
   assert.match(npmPublishExample, /npm-publish\.yml@v0\.3\.1/);
   assert.match(npmPublishExample, /create_github_release: true/);

@@ -52,14 +52,18 @@ jobs:
       - name: Create GitHub deployment
         id: deployment
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DEPLOY_REF: ${{ inputs.ref }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          DEPLOY_DESCRIPTION: ${{ inputs.deployment_description }}
         with:
           script: |
             const deployment = await github.rest.repos.createDeployment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: '${{ inputs.ref }}',
-              environment: '${{ inputs.environment }}',
-              description: '${{ inputs.deployment_description }}',
+              ref: process.env.DEPLOY_REF,
+              environment: process.env.DEPLOY_ENVIRONMENT,
+              description: process.env.DEPLOY_DESCRIPTION,
               auto_merge: false,
               required_contexts: []
             });
@@ -93,21 +97,60 @@ jobs:
           echo "KUBECONFIG=/tmp/kubeconfig" >> "$GITHUB_ENV"
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
+          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
+
+      - name: Validate Kubernetes identifiers
+        shell: bash
+        env:
+          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
+          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
+        run: |
+          set -euo pipefail
+
+          case "$KUBE_NAMESPACE" in
+            ('') echo "KUBE_NAMESPACE is required"; exit 1 ;;
+            (*[!a-z0-9.-]*) echo "KUBE_NAMESPACE contains invalid characters: $KUBE_NAMESPACE"; exit 1 ;;
+          esac
+
+          case "$KUBE_SERVICE_NAME" in
+            ('') echo "KUBE_SERVICE_NAME is required"; exit 1 ;;
+            (*[!A-Za-z0-9._-]*) echo "KUBE_SERVICE_NAME contains invalid characters: $KUBE_SERVICE_NAME"; exit 1 ;;
+          esac
 
       - name: Rollout restart deployment
-        run: kubectl rollout restart deployment/${{ inputs.kube_service_name }} -n ${{ inputs.kube_namespace }}
+        shell: bash
+        env:
+          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
+          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
+        run: |
+          set -euo pipefail
+          kubectl rollout restart deployment/"$KUBE_SERVICE_NAME" -n "$KUBE_NAMESPACE"
 
       - name: Wait for rollout to complete
-        run: kubectl rollout status deployment/${{ inputs.kube_service_name }} -n ${{ inputs.kube_namespace }} --timeout=300s
+        shell: bash
+        env:
+          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
+          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
+        run: |
+          set -euo pipefail
+          kubectl rollout status deployment/"$KUBE_SERVICE_NAME" -n "$KUBE_NAMESPACE" --timeout=300s
 
       - name: Verify deployment
+        shell: bash
+        env:
+          KUBE_NAMESPACE: ${{ inputs.kube_namespace }}
+          KUBE_SERVICE_NAME: ${{ inputs.kube_service_name }}
         run: |
-          kubectl get pods -n ${{ inputs.kube_namespace }} -l app=${{ inputs.kube_service_name }}
-          kubectl get service ${{ inputs.kube_service_name }} -n ${{ inputs.kube_namespace }}
+          set -euo pipefail
+          kubectl get pods -n "$KUBE_NAMESPACE" -l "app=$KUBE_SERVICE_NAME"
+          kubectl get service "$KUBE_SERVICE_NAME" -n "$KUBE_NAMESPACE"
 
       - name: Set deployment status to success
         if: success()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DEPLOYMENT_APP_URL: ${{ inputs.kube_app_url }}
         with:
           script: |
             const deploymentId = Number('${{ steps.deployment.outputs.result }}');
@@ -120,7 +163,7 @@ jobs:
               log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               auto_inactive: true
             };
-            const envUrl = '${{ inputs.kube_app_url }}';
+            const envUrl = process.env.DEPLOYMENT_APP_URL;
             if (envUrl) {
               status.environment_url = envUrl;
             }

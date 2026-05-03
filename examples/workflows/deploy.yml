@@ -22,8 +22,8 @@ jobs:
       ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       environment: development
       deployment_description: Deploy to Kubernetes
-      kube_namespace: ${{ secrets.KUBE_NAMESPACE }}
-      kube_service_name: ${{ secrets.KUBE_SERVICE_NAME }}
-      kube_app_url: ${{ secrets.KUBE_APP_URL }}
+      kube_namespace: ${{ vars.KUBE_NAMESPACE }}
+      kube_service_name: ${{ vars.KUBE_SERVICE_NAME }}
+      kube_app_url: ${{ vars.KUBE_APP_URL }}
     secrets:
       KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}

@@ -244,12 +244,24 @@ jobs:
             fi
           fi
 
+      - name: Validate npm access mode
+        shell: bash
+        env:
+          NPM_ACCESS: ${{ inputs.npm_access }}
+        run: |
+          set -euo pipefail
+          case "$NPM_ACCESS" in
+            public|restricted) ;;
+            *) echo "Invalid npm access mode: $NPM_ACCESS"; exit 1 ;;
+          esac
+
       - name: Publish to npm
         shell: bash
         working-directory: ${{ inputs.working_directory }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access ${{ inputs.npm_access }} --tag ${{ steps.npm-tag.outputs.tag }}
+          NPM_ACCESS: ${{ inputs.npm_access }}
+        run: npm publish --provenance --access "$NPM_ACCESS" --tag ${{ steps.npm-tag.outputs.tag }}
 
       - name: Create GitHub Release
         if: ${{ inputs.create_github_release }}
