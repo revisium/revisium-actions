@@ -15,7 +15,8 @@ Revisium repositories.
 ## Current Scope
 
 This repository is being built in small migrations. The first supported helpers
-cover release metadata that is currently duplicated across service repositories:
+cover release metadata plus shared build, deploy, and publish workflows that
+are currently duplicated across service and package repositories:
 
 | Helper                              | Purpose                                                                      |
 | ----------------------------------- | ---------------------------------------------------------------------------- |
@@ -23,6 +24,13 @@ cover release metadata that is currently duplicated across service repositories:
 | `actions/validate-version-metadata` | Validate package and optional JSON version files against a target version.   |
 | `actions/check-prerelease-deps`     | Reject prerelease runtime dependencies before stable publication.            |
 | `actions/plan-release`              | Compute release-train branch, version, tag, and channel transitions.         |
+
+| Reusable workflow                    | Purpose                                                             |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `.github/workflows/docker-build.yml` | Build and push Docker images for Revisium service repositories.     |
+| `.github/workflows/node-build.yml`   | Install, validate, and build Node.js repositories from one wrapper. |
+| `.github/workflows/deploy.yml`       | Restart Kubernetes workloads and record GitHub deployments.         |
+| `.github/workflows/npm-publish.yml`  | Validate, publish, and optionally create npm package releases.      |
 
 ## Release Workflow State Diagram
 
@@ -100,6 +108,73 @@ second helper ref. Set `dry_run: false` and configure
 `RELEASE_BOT_CLIENT_ID` / `RELEASE_BOT_PRIVATE_KEY` to publish a GitHub-verified
 release commit, release branch, and tag.
 
+The build workflows follow the same pattern. Keep the trigger and repo-specific
+branch policy in the caller repository, then call one of the reusable workflows
+with only the shape-specific inputs:
+
+```yaml
+jobs:
+  build:
+    uses: revisium/revisium-actions/.github/workflows/docker-build.yml@v0.3.1
+    with:
+      image_name: ${{ github.event.repository.name }}
+      context: .
+      dockerfile: Dockerfile
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+```
+
+```yaml
+jobs:
+  build:
+    uses: revisium/revisium-actions/.github/workflows/node-build.yml@v0.3.1
+    with:
+      node_version: 24.11.1
+      install_command: npm ci
+      run_commands: |
+        npm run lint
+        npm test
+        npm run build
+```
+
+```yaml
+jobs:
+  deploy:
+    uses: revisium/revisium-actions/.github/workflows/deploy.yml@v0.3.1
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}
+      kube_namespace: ${{ vars.KUBE_NAMESPACE }}
+      kube_service_name: ${{ vars.KUBE_SERVICE_NAME }}
+      kube_app_url: ${{ vars.KUBE_APP_URL }}
+    secrets:
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+```
+
+```yaml
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    uses: revisium/revisium-actions/.github/workflows/npm-publish.yml@v0.3.1
+    with:
+      working_directory: .
+      install_command: npm ci
+      pre_publish_commands: |
+        npm run build
+      publish_auth: token
+      create_github_release: true
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
+Use `publish_auth: oidc` when the package is configured for npm trusted
+publishing. That mode uses GitHub OIDC instead of a long-lived npm token, still
+requires `npm_access: public`, and does not need `NPM_TOKEN`.
+
 ## Example
 
 ```yaml
@@ -143,3 +218,8 @@ the real actionlint check in a separate job.
 - [Release bot integration](docs/release-bot.md)
 - [Dry-run release train example](examples/workflows/release-train-dry-run.yml)
 - [Release metadata example workflow](examples/workflows/release-metadata.yml)
+- [Docker build example workflow](examples/workflows/docker-build.yml)
+- [Node build example workflow](examples/workflows/node-build.yml)
+- [Deploy example workflow](examples/workflows/deploy.yml)
+- [npm publish example workflow](examples/workflows/npm-publish.yml)
+- [npm publish OIDC example workflow](examples/workflows/npm-publish-oidc.yml)

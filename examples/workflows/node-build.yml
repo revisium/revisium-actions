@@ -1,0 +1,25 @@
+name: Node Build Example
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - release/**
+    tags:
+      - v*
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: revisium/revisium-actions/.github/workflows/node-build.yml@v0.3.1
+    with:
+      node_version: 24.11.1
+      working_directory: .
+      install_command: npm ci
+      run_commands: |
+        npm run lint
+        npm test
+        npm run build
