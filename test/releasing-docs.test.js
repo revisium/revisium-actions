@@ -1,16 +1,25 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const readme = fs.readFileSync('README.md', 'utf8');
-const releasing = fs.readFileSync('docs/releasing.md', 'utf8');
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const readme = fs.readFileSync(`${repoRoot}/README.md`, 'utf8');
+const releasing = fs.readFileSync(`${repoRoot}/docs/releasing.md`, 'utf8');
+
+function getMermaidBlock(doc) {
+  const match = doc.match(/```mermaid\s*([\s\S]*?)```/);
+  assert.ok(match, 'Missing Mermaid diagram block');
+  return match[1];
+}
 
 test('README documents the release workflow architecture', () => {
   assert.match(readme, /## Release Workflow State Diagram/);
-  assert.match(
-    readme,
-    /```mermaid[\s\S]*stateDiagram-v2[\s\S]*start-minor-alpha[\s\S]*rc-bump[\s\S]*stable/,
-  );
+  const diagram = getMermaidBlock(readme);
+  assert.match(diagram, /stateDiagram-v2/);
+  assert.match(diagram, /Stable --> AlphaTrain: start-minor-alpha/);
+  assert.match(diagram, /RCTrain --> RCTrain: rc-bump/);
+  assert.match(diagram, /RCTrain --> Stable: stable/);
   assert.match(readme, /helper SHA from GitHub's workflow-run metadata/);
   assert.match(readme, /### Branch Model/);
   assert.match(readme, /### Action Options/);
@@ -20,10 +29,11 @@ test('README documents the release workflow architecture', () => {
 
 test('release instructions document the same workflow architecture', () => {
   assert.match(releasing, /## Release Workflow State Diagram/);
-  assert.match(
-    releasing,
-    /```mermaid[\s\S]*stateDiagram-v2[\s\S]*start-minor-alpha[\s\S]*rc-bump[\s\S]*stable/,
-  );
+  const diagram = getMermaidBlock(releasing);
+  assert.match(diagram, /stateDiagram-v2/);
+  assert.match(diagram, /Stable --> AlphaTrain: start-minor-alpha/);
+  assert.match(diagram, /RCTrain --> RCTrain: rc-bump/);
+  assert.match(diagram, /RCTrain --> Stable: stable/);
   assert.match(releasing, /verified release refs in write mode/);
   assert.match(releasing, /### Branch Model/);
   assert.match(releasing, /Runs from/);
