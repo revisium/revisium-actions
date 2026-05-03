@@ -1,0 +1,66 @@
+name: Plan Release
+description: Compute a release train transition without pushing branches or tags.
+inputs:
+  action:
+    description: Release train transition to plan.
+    required: true
+  dry-run:
+    description: Whether the caller is planning without writes.
+    required: false
+    default: 'true'
+  base-branch:
+    description: Base branch used for start-* transitions.
+    required: false
+    default: master
+  current-branch:
+    description: Branch to plan from. Defaults to the current GitHub ref name.
+    required: false
+    default: ''
+  package-path:
+    description: Package manifest path to inspect.
+    required: false
+    default: package.json
+outputs:
+  action:
+    description: Planned release train action.
+    value: ${{ steps.plan.outputs.action }}
+  target_branch:
+    description: Branch that would be created or updated.
+    value: ${{ steps.plan.outputs.target_branch }}
+  target_version:
+    description: Version that would be written to package metadata.
+    value: ${{ steps.plan.outputs.target_version }}
+  tag:
+    description: Release tag that would be created.
+    value: ${{ steps.plan.outputs.tag }}
+  channel:
+    description: Release channel, such as stable, alpha, or rc.
+    value: ${{ steps.plan.outputs.channel }}
+  is_prerelease:
+    description: Whether target_version is a prerelease.
+    value: ${{ steps.plan.outputs.is_prerelease }}
+  last_stable_tag:
+    description: Highest stable vX.Y.Z tag found locally.
+    value: ${{ steps.plan.outputs.last_stable_tag }}
+  ref_mode:
+    description: Whether the release branch would be created or updated.
+    value: ${{ steps.plan.outputs.ref_mode }}
+  should_release:
+    description: Whether this transition should continue.
+    value: ${{ steps.plan.outputs.should_release }}
+runs:
+  using: composite
+  steps:
+    - name: Fetch tags and release refs
+      shell: bash
+      run: git fetch --force --tags origin '+refs/heads/release/*:refs/remotes/origin/release/*'
+
+    - id: plan
+      shell: bash
+      env:
+        BASE_BRANCH: ${{ inputs.base-branch }}
+        CURRENT_BRANCH: ${{ inputs.current-branch }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        PACKAGE_PATH: ${{ inputs.package-path }}
+        RELEASE_ACTION: ${{ inputs.action }}
+      run: node "$GITHUB_ACTION_PATH/../../bin/plan-release.mjs"

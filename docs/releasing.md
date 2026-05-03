@@ -33,6 +33,38 @@ Cut `v0.1.0` after the initial repository foundation is ready:
 - ESLint, Prettier, and actionlint pass.
 - CI runs the full validation script.
 
+## `v0.2.0` Release Train Scope
+
+`v0.2.0` introduces the dry-run release train surface. It is intended to test
+alpha, rc, stable, and patch transitions in real repositories before enabling
+write-mode automation.
+
+The reusable workflow is:
+
+```yaml
+jobs:
+  release-train:
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.2.0
+    with:
+      action: start-minor-alpha
+      dry_run: true
+      actions_ref: v0.2.0
+      install_command: npm ci
+      validate_command: |
+        npm run typecheck
+        npm run build
+```
+
+The workflow checks out the caller repository, computes the release train
+transition, applies version metadata in the runner workspace, validates stable
+runtime dependencies, runs the caller's validation commands, and prints the
+target branch, tag, channel, and mode it would use. It does not push branches,
+commits, tags, or releases while `dry_run` is true.
+
+Write mode is intentionally blocked in this release. After dry-run behavior is
+proven in consumer repositories, a later release can add GitHub App token-based
+branch and tag creation.
+
 ## Manual Release
 
 Run these commands from the repository root:

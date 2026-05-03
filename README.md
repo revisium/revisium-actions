@@ -22,10 +22,39 @@ cover release metadata that is currently duplicated across service repositories:
 | `actions/apply-version-metadata`    | Update `package.json`, `package-lock.json`, and optional JSON version files. |
 | `actions/validate-version-metadata` | Validate package and optional JSON version files against a target version.   |
 | `actions/check-prerelease-deps`     | Reject prerelease runtime dependencies before stable publication.            |
+| `actions/plan-release`              | Compute release-train branch, version, tag, and channel transitions.         |
+
+The first reusable workflow is available as a dry-run release train:
+
+```yaml
+jobs:
+  release-train:
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.2.0
+    with:
+      action: ${{ inputs.action }}
+      dry_run: true
+      actions_ref: v0.2.0
+      node_version: 24.11.1
+      install_command: npm ci
+      validate_command: |
+        npm run typecheck
+        npm run build
+```
+
+`release-train.yml` intentionally supports dry-run only in the initial version.
+It computes the same release train transitions used by Revisium service
+repositories, applies metadata in the runner workspace, validates the result,
+and prints the branch/tag it would create without pushing anything.
 
 ## Example
 
 ```yaml
+- uses: revisium/revisium-actions/actions/plan-release@v0.2.0
+  id: release
+  with:
+    action: start-minor-alpha
+    dry-run: true
+
 - uses: revisium/revisium-actions/actions/apply-version-metadata@v0
   with:
     target-version: ${{ steps.release.outputs.target_version }}
@@ -58,4 +87,5 @@ the real actionlint check in a separate job.
 
 - [Release instructions](docs/releasing.md)
 - [Release bot integration](docs/release-bot.md)
+- [Dry-run release train example](examples/workflows/release-train-dry-run.yml)
 - [Release metadata example workflow](examples/workflows/release-metadata.yml)
