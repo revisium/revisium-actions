@@ -108,15 +108,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          case "$KUBE_NAMESPACE" in
-            ('') echo "KUBE_NAMESPACE is required"; exit 1 ;;
-            (*[!a-z0-9.-]*) echo "KUBE_NAMESPACE contains invalid characters: $KUBE_NAMESPACE"; exit 1 ;;
-          esac
+          validate_dns_label() {
+            local name="$1"
+            local value="$2"
+            local pattern="$3"
 
-          case "$KUBE_SERVICE_NAME" in
-            ('') echo "KUBE_SERVICE_NAME is required"; exit 1 ;;
-            (*[!A-Za-z0-9._-]*) echo "KUBE_SERVICE_NAME contains invalid characters: $KUBE_SERVICE_NAME"; exit 1 ;;
-          esac
+            if [[ -z "$value" ]]; then
+              echo "$name is required"
+              exit 1
+            fi
+
+            if ((${#value} > 63)); then
+              echo "$name must be 63 characters or fewer: $value"
+              exit 1
+            fi
+
+            if [[ ! "$value" =~ $pattern ]]; then
+              echo "$name must be a valid Kubernetes DNS label: $value"
+              exit 1
+            fi
+          }
+
+          validate_dns_label KUBE_NAMESPACE "$KUBE_NAMESPACE" '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+          validate_dns_label KUBE_SERVICE_NAME "$KUBE_SERVICE_NAME" '^[a-z]([-a-z0-9]*[a-z0-9])?$'
 
       - name: Rollout restart deployment
         shell: bash

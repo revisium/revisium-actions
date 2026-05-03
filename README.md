@@ -152,6 +152,11 @@ jobs:
 ```
 
 ```yaml
+on:
+  push:
+    tags:
+      - 'v*'
+
 jobs:
   publish:
     uses: revisium/revisium-actions/.github/workflows/npm-publish.yml@v0.3.1

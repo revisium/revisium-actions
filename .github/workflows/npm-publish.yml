@@ -54,6 +54,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -136,13 +137,19 @@ jobs:
           if (fs.existsSync(lockPath)) {
             const lockJson = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
             const lockVersion = lockJson.version;
-            const lockRootVersion = lockJson.packages?.['']?.version;
+            const lockRootPackage = lockJson.packages?.[''];
+            const lockRootVersion = lockRootPackage?.version;
 
             console.log(`package-lock.json version: ${lockVersion}`);
             console.log(`package-lock root version: ${lockRootVersion}`);
 
-            if (lockVersion !== tagVersion || lockRootVersion !== tagVersion) {
-              console.error(`Version mismatch: package-lock.json does not match tag ${tagVersion}`);
+            if (lockVersion !== tagVersion) {
+              console.error(`Version mismatch: package-lock.json (${lockVersion}) != tag (${tagVersion})`);
+              process.exit(1);
+            }
+
+            if (lockRootPackage && lockRootVersion !== tagVersion) {
+              console.error(`Version mismatch: package-lock root version (${lockRootVersion}) != tag (${tagVersion})`);
               process.exit(1);
             }
           }

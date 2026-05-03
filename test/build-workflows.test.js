@@ -29,6 +29,7 @@ test('README documents the shared build workflow helpers', () => {
   assert.match(readme, /node-build\.yml@v0\.3\.1/);
   assert.match(readme, /deploy\.yml@v0\.3\.1/);
   assert.match(readme, /npm-publish\.yml@v0\.3\.1/);
+  assert.match(readme, /tags:\n\s+- 'v\*'/);
 });
 
 test('docker build reusable workflow exposes the service build shape', () => {
@@ -60,6 +61,11 @@ test('deploy reusable workflow exposes the Kubernetes deployment shape', () => {
   assert.match(deployWorkflow, /Rollout restart deployment/);
   assert.match(deployWorkflow, /Set deployment status to success/);
   assert.match(deployWorkflow, /KUBE_SERVICE_NAME/);
+  assert.match(deployWorkflow, /validate_dns_label KUBE_NAMESPACE/);
+  assert.match(deployWorkflow, /validate_dns_label KUBE_SERVICE_NAME/);
+  assert.match(deployWorkflow, /63 characters or fewer/);
+  assert.match(deployWorkflow, /\^\[a-z0-9\]\(\[-a-z0-9\]\*\[a-z0-9\]\)\?\$/);
+  assert.match(deployWorkflow, /\^\[a-z\]\(\[-a-z0-9\]\*\[a-z0-9\]\)\?\$/);
 });
 
 test('npm publish reusable workflow exposes the publish shape', () => {
@@ -71,6 +77,9 @@ test('npm publish reusable workflow exposes the publish shape', () => {
   assert.match(npmPublishWorkflow, /Create GitHub Release/);
   assert.match(npmPublishWorkflow, /Determine npm tag/);
   assert.match(npmPublishWorkflow, /Publish to npm/);
+  assert.match(npmPublishWorkflow, /timeout-minutes: 30/);
+  assert.ok(npmPublishWorkflow.includes("const lockRootPackage = lockJson.packages?.[''];"));
+  assert.match(npmPublishWorkflow, /if \(lockRootPackage && lockRootVersion !== tagVersion\)/);
 });
 
 test('examples point at the reusable build workflows', () => {
