@@ -13,6 +13,10 @@ const npmPublishWorkflow = fs.readFileSync(`${repoRoot}/.github/workflows/npm-pu
 const dockerExample = fs.readFileSync(`${repoRoot}/examples/workflows/docker-build.yml`, 'utf8');
 const nodeExample = fs.readFileSync(`${repoRoot}/examples/workflows/node-build.yml`, 'utf8');
 const deployExample = fs.readFileSync(`${repoRoot}/examples/workflows/deploy.yml`, 'utf8');
+const deployLegacySecretsExample = fs.readFileSync(
+  `${repoRoot}/examples/workflows/deploy-legacy-secrets.yml`,
+  'utf8',
+);
 const npmPublishExample = fs.readFileSync(`${repoRoot}/examples/workflows/npm-publish.yml`, 'utf8');
 const npmPublishOidcExample = fs.readFileSync(
   `${repoRoot}/examples/workflows/npm-publish-oidc.yml`,
@@ -27,7 +31,8 @@ test('README documents the shared build workflow helpers', () => {
   assert.match(readme, /build workflows follow the same pattern/i);
   assert.match(readme, /docker-build\.yml@v0\.3\.1/);
   assert.match(readme, /node-build\.yml@v0\.3\.1/);
-  assert.match(readme, /deploy\.yml@v0\.3\.1/);
+  assert.match(readme, /deploy\.yml@v0\.3\.3/);
+  assert.match(readme, /Deploy legacy secrets example workflow/);
   assert.match(readme, /npm-publish\.yml@v0\.3\.1/);
   assert.match(readme, /tags:\n\s+- 'v\*'/);
 });
@@ -55,6 +60,18 @@ test('deploy reusable workflow exposes the Kubernetes deployment shape', () => {
   assert.match(deployWorkflow, /workflow_call/);
   assert.match(deployWorkflow, /kube_namespace/);
   assert.match(deployWorkflow, /kube_service_name/);
+  assert.match(
+    deployWorkflow,
+    /KUBE_NAMESPACE: \$\{\{ inputs\.kube_namespace \|\| secrets\.KUBE_NAMESPACE \}\}/,
+  );
+  assert.match(
+    deployWorkflow,
+    /KUBE_SERVICE_NAME: \$\{\{ inputs\.kube_service_name \|\| secrets\.KUBE_SERVICE_NAME \}\}/,
+  );
+  assert.match(
+    deployWorkflow,
+    /KUBE_APP_URL: \$\{\{ inputs\.kube_app_url \|\| secrets\.KUBE_APP_URL \}\}/,
+  );
   assert.match(deployWorkflow, /DEPLOY_REF/);
   assert.match(deployWorkflow, /process\.env\.DEPLOY_DESCRIPTION/);
   assert.match(deployWorkflow, /Create GitHub deployment/);
@@ -87,9 +104,12 @@ test('examples point at the reusable build workflows', () => {
   assert.match(dockerExample, /DOCKERHUB_USERNAME/);
   assert.match(nodeExample, /node-build\.yml@v0\.3\.1/);
   assert.match(nodeExample, /npm run build/);
-  assert.match(deployExample, /deploy\.yml@v0\.3\.1/);
+  assert.match(deployExample, /deploy\.yml@v0\.3\.3/);
   assert.match(deployExample, /vars\.KUBE_NAMESPACE/);
   assert.match(deployExample, /KUBE_CONFIG/);
+  assert.match(deployLegacySecretsExample, /deploy\.yml@v0\.3\.3/);
+  assert.match(deployLegacySecretsExample, /secrets\.KUBE_NAMESPACE/);
+  assert.match(deployLegacySecretsExample, /secrets\.KUBE_SERVICE_NAME/);
   assert.match(npmPublishExample, /npm-publish\.yml@v0\.3\.1/);
   assert.match(npmPublishExample, /publish_auth: token/);
   assert.match(npmPublishExample, /create_github_release: true/);
