@@ -1,0 +1,272 @@
+name: Reusable npm Publish
+
+on:
+  workflow_call:
+    inputs:
+      node_version:
+        description: Node.js version used for publish validation.
+        required: false
+        default: 24.11.1
+        type: string
+      working_directory:
+        description: Directory that contains package.json and package-lock.json.
+        required: false
+        default: .
+        type: string
+      package_path:
+        description: Package manifest path relative to working_directory.
+        required: false
+        default: package.json
+        type: string
+      install_command:
+        description: Command that installs repository dependencies.
+        required: false
+        default: npm ci
+        type: string
+      pre_publish_commands:
+        description: Newline-separated shell commands to run after install.
+        required: false
+        default: ''
+        type: string
+      npm_access:
+        description: npm access level used for publish.
+        required: false
+        default: public
+        type: string
+      create_github_release:
+        description: Whether to create a GitHub Release after publishing.
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      NPM_TOKEN:
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ inputs.node_version }}
+          registry-url: https://registry.npmjs.org
+
+      - name: Validate tag format
+        id: tag
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "Publishing for tag: $TAG"
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|rc)\.[0-9]+)?$ ]]; then
+            echo "Invalid tag format: $TAG (expected vX.Y.Z, vX.Y.Z-alpha.N, or vX.Y.Z-rc.N)"
+            exit 1
+          fi
+
+          VERSION=${TAG#v}
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          INSTALL_COMMAND: ${{ inputs.install_command }}
+        run: bash -euo pipefail -c "$INSTALL_COMMAND"
+
+      - name: Resolve package metadata
+        id: package
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          PACKAGE_PATH: ${{ inputs.package_path }}
+        run: |
+          set -euo pipefail
+          PACKAGE_NAME=$(node -p "require('./$PACKAGE_PATH').name")
+          PACKAGE_VERSION=$(node -p "require('./$PACKAGE_PATH').version")
+
+          echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate package and lockfile versions
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          PACKAGE_PATH: ${{ inputs.package_path }}
+          TAG_VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const packagePath = process.env.PACKAGE_PATH || 'package.json';
+          const packageDir = path.dirname(packagePath);
+          const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+          const lockPath = path.join(packageDir, 'package-lock.json');
+          const tagVersion = process.env.TAG_VERSION;
+
+          console.log(`package.json version: ${packageJson.version}`);
+          console.log(`tag version: ${tagVersion}`);
+
+          if (packageJson.version !== tagVersion) {
+            console.error(`Version mismatch: package.json (${packageJson.version}) != tag (${tagVersion})`);
+            process.exit(1);
+          }
+
+          if (fs.existsSync(lockPath)) {
+            const lockJson = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+            const lockVersion = lockJson.version;
+            const lockRootVersion = lockJson.packages?.['']?.version;
+
+            console.log(`package-lock.json version: ${lockVersion}`);
+            console.log(`package-lock root version: ${lockRootVersion}`);
+
+            if (lockVersion !== tagVersion || lockRootVersion !== tagVersion) {
+              console.error(`Version mismatch: package-lock.json does not match tag ${tagVersion}`);
+              process.exit(1);
+            }
+          }
+          NODE
+
+      - name: Ensure stable releases do not depend on prereleases
+        if: ${{ !contains(steps.tag.outputs.version, '-') }}
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          PACKAGE_PATH: ${{ inputs.package_path }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const sections = ['dependencies', 'peerDependencies', 'optionalDependencies'];
+          const prereleaseVersionPattern = /(?:^|[^\w.-])v?\d+\.\d+\.\d+-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*/;
+          const violations = [];
+          const packagePath = process.env.PACKAGE_PATH || 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+
+          for (const section of sections) {
+            const deps = pkg[section];
+            if (!deps) continue;
+
+            for (const [name, version] of Object.entries(deps)) {
+              if (prereleaseVersionPattern.test(String(version))) {
+                violations.push(`${section}: ${name}@${version}`);
+              }
+            }
+          }
+
+          if (violations.length > 0) {
+            console.error('Stable releases cannot depend on prerelease runtime dependencies:');
+            for (const violation of violations) console.error(`- ${violation}`);
+            console.error('Release stable dependency versions first, or publish this package as a prerelease.');
+            process.exit(1);
+          }
+          NODE
+
+      - name: Run pre-publish commands
+        if: ${{ inputs.pre_publish_commands != '' }}
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          PRE_PUBLISH_COMMANDS: ${{ inputs.pre_publish_commands }}
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r command; do
+            command="${command#"${command%%[![:space:]]*}"}"
+            command="${command%"${command##*[![:space:]]}"}"
+
+            if [[ -z "$command" || "${command#\#}" != "$command" ]]; then
+              continue
+            fi
+
+            echo "Running: $command"
+            bash -euo pipefail -c "$command"
+          done <<< "$PRE_PUBLISH_COMMANDS"
+
+      - name: Ensure npm version does not already exist
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          PACKAGE_NAME: ${{ steps.package.outputs.package_name }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          LOOKUP_ERR=$(mktemp)
+          PUBLISHED_VERSION=$(npm view "$PACKAGE_NAME@$VERSION" version 2>"$LOOKUP_ERR" || true)
+
+          if [[ -s "$LOOKUP_ERR" ]]; then
+            echo "Warning: npm registry lookup produced stderr:"
+            cat "$LOOKUP_ERR"
+          fi
+          rm -f "$LOOKUP_ERR"
+
+          if [[ -n "$PUBLISHED_VERSION" ]]; then
+            echo "$PACKAGE_NAME@$VERSION is already published"
+            exit 1
+          fi
+
+      - name: Determine npm tag
+        id: npm-tag
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$VERSION" =~ -alpha ]]; then
+            echo "tag=alpha" >> "$GITHUB_OUTPUT"
+          elif [[ "$VERSION" =~ -rc ]]; then
+            echo "tag=rc" >> "$GITHUB_OUTPUT"
+          else
+            LATEST_STABLE_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+            if [[ "v$VERSION" == "$LATEST_STABLE_TAG" ]]; then
+              echo "tag=latest" >> "$GITHUB_OUTPUT"
+            else
+              IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
+              echo "tag=release-$MAJOR-$MINOR" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Publish to npm
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access ${{ inputs.npm_access }} --tag ${{ steps.npm-tag.outputs.tag }}
+
+      - name: Create GitHub Release
+        if: ${{ inputs.create_github_release }}
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Release ${{ steps.tag.outputs.tag }}
+          body: |
+            ## Changes in ${{ steps.tag.outputs.tag }}
+
+            This release was automatically generated from tag ${{ steps.tag.outputs.tag }}.
+
+            ### Installation
+            ```bash
+            npm install ${{ steps.package.outputs.package_name }}@${{ steps.tag.outputs.version }}
+            ```
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.version, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

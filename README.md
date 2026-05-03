@@ -15,8 +15,8 @@ Revisium repositories.
 ## Current Scope
 
 This repository is being built in small migrations. The first supported helpers
-cover release metadata and shared build workflows that are currently duplicated
-across service and package repositories:
+cover release metadata plus shared build, deploy, and publish workflows that
+are currently duplicated across service and package repositories:
 
 | Helper                              | Purpose                                                                      |
 | ----------------------------------- | ---------------------------------------------------------------------------- |
@@ -29,6 +29,8 @@ across service and package repositories:
 | ------------------------------------ | ------------------------------------------------------------------- |
 | `.github/workflows/docker-build.yml` | Build and push Docker images for Revisium service repositories.     |
 | `.github/workflows/node-build.yml`   | Install, validate, and build Node.js repositories from one wrapper. |
+| `.github/workflows/deploy.yml`       | Restart Kubernetes workloads and record GitHub deployments.         |
+| `.github/workflows/npm-publish.yml`  | Validate, publish, and optionally create npm package releases.      |
 
 ## Release Workflow State Diagram
 
@@ -134,6 +136,33 @@ jobs:
         npm run build
 ```
 
+```yaml
+jobs:
+  deploy:
+    uses: revisium/revisium-actions/.github/workflows/deploy.yml@v0.3.1
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}
+      kube_namespace: ${{ secrets.KUBE_NAMESPACE }}
+      kube_service_name: ${{ secrets.KUBE_SERVICE_NAME }}
+      kube_app_url: ${{ secrets.KUBE_APP_URL }}
+    secrets:
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+```
+
+```yaml
+jobs:
+  publish:
+    uses: revisium/revisium-actions/.github/workflows/npm-publish.yml@v0.3.1
+    with:
+      working_directory: .
+      install_command: npm ci
+      pre_publish_commands: |
+        npm run build
+      create_github_release: true
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
 ## Example
 
 ```yaml
@@ -179,3 +208,5 @@ the real actionlint check in a separate job.
 - [Release metadata example workflow](examples/workflows/release-metadata.yml)
 - [Docker build example workflow](examples/workflows/docker-build.yml)
 - [Node build example workflow](examples/workflows/node-build.yml)
+- [Deploy example workflow](examples/workflows/deploy.yml)
+- [npm publish example workflow](examples/workflows/npm-publish.yml)

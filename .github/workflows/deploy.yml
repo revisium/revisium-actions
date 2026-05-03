@@ -1,0 +1,142 @@
+name: Reusable Deploy
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref or commit SHA to deploy.
+        required: true
+        type: string
+      environment:
+        description: GitHub deployment environment name.
+        required: false
+        default: development
+        type: string
+      deployment_description:
+        description: GitHub deployment description.
+        required: false
+        default: Deploy to Kubernetes
+        type: string
+      kube_namespace:
+        description: Kubernetes namespace to restart.
+        required: true
+        type: string
+      kube_service_name:
+        description: Kubernetes deployment and service name.
+        required: true
+        type: string
+      kube_app_url:
+        description: Public app URL to attach to the deployment status.
+        required: false
+        default: ''
+        type: string
+    secrets:
+      KUBE_CONFIG:
+        required: true
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Create GitHub deployment
+        id: deployment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: '${{ inputs.ref }}',
+              environment: '${{ inputs.environment }}',
+              description: '${{ inputs.deployment_description }}',
+              auto_merge: false,
+              required_contexts: []
+            });
+            return deployment.data.id;
+          result-encoding: string
+
+      - name: Set deployment status to in_progress
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: Number('${{ steps.deployment.outputs.result }}'),
+              state: 'in_progress',
+              description: 'Deployment in progress'
+            });
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
+        with:
+          version: v1.29.6
+
+      - name: Set up kubectl
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 177
+          echo "$KUBE_CONFIG" | base64 -d > /tmp/kubeconfig
+          chmod 600 /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> "$GITHUB_ENV"
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Rollout restart deployment
+        run: kubectl rollout restart deployment/${{ inputs.kube_service_name }} -n ${{ inputs.kube_namespace }}
+
+      - name: Wait for rollout to complete
+        run: kubectl rollout status deployment/${{ inputs.kube_service_name }} -n ${{ inputs.kube_namespace }} --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n ${{ inputs.kube_namespace }} -l app=${{ inputs.kube_service_name }}
+          kubectl get service ${{ inputs.kube_service_name }} -n ${{ inputs.kube_namespace }}
+
+      - name: Set deployment status to success
+        if: success()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const deploymentId = Number('${{ steps.deployment.outputs.result }}');
+            const status = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deploymentId,
+              state: 'success',
+              description: 'Deployment completed successfully',
+              log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              auto_inactive: true
+            };
+            const envUrl = '${{ inputs.kube_app_url }}';
+            if (envUrl) {
+              status.environment_url = envUrl;
+            }
+            await github.rest.repos.createDeploymentStatus(status);
+
+      - name: Set deployment status to failure
+        if: ${{ (failure() || cancelled()) && steps.deployment.outputs.result }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const deploymentId = Number('${{ steps.deployment.outputs.result }}');
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deploymentId,
+              state: 'failure',
+              description: 'Deployment failed or cancelled',
+              log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
