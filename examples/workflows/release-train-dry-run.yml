@@ -1,0 +1,44 @@
+name: Release Train Dry Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Release train transition.
+        required: true
+        type: choice
+        options:
+          - start-minor-alpha
+          - start-major-alpha
+          - start-minor-rc
+          - start-major-rc
+          - start-minor-stable
+          - start-major-stable
+          - alpha-bump
+          - promote-rc
+          - rc-bump
+          - stable
+          - patch
+          - patch-alpha-start
+          - patch-rc-start
+      dry_run:
+        description: Validate and show the computed release without pushing.
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  release-train:
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.2.0
+    with:
+      action: ${{ inputs.action }}
+      dry_run: ${{ inputs.dry_run }}
+      actions_ref: v0.2.0
+      node_version: 24.11.1
+      install_command: npm ci
+      validate_command: |
+        npm run typecheck
+        npm run build

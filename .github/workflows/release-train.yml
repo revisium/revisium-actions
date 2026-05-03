@@ -1,0 +1,152 @@
+name: Reusable Release Train
+
+on:
+  workflow_call:
+    inputs:
+      action:
+        description: Release train transition.
+        required: true
+        type: string
+      dry_run:
+        description: Validate and show the computed release without pushing.
+        required: false
+        default: true
+        type: boolean
+      actions_ref:
+        description: revisium-actions ref that provides the helper scripts.
+        required: false
+        default: v0.2.0
+        type: string
+      base_branch:
+        description: Base branch used by start-* transitions.
+        required: false
+        default: master
+        type: string
+      node_version:
+        description: Node.js version used for release validation.
+        required: false
+        default: 24.11.1
+        type: string
+      package_path:
+        description: Package manifest path to inspect.
+        required: false
+        default: package.json
+        type: string
+      version_files:
+        description: Newline-separated JSON files whose versions should be updated.
+        required: false
+        default: ''
+        type: string
+      install_command:
+        description: Command that installs repository dependencies.
+        required: false
+        default: npm ci
+        type: string
+      validate_command:
+        description: Command that validates the repository after metadata is applied.
+        required: false
+        default: ''
+        type: string
+    outputs:
+      target_branch:
+        description: Branch that would be created or updated.
+        value: ${{ jobs.release_train.outputs.target_branch }}
+      target_version:
+        description: Version that would be written to package metadata.
+        value: ${{ jobs.release_train.outputs.target_version }}
+      tag:
+        description: Release tag that would be created.
+        value: ${{ jobs.release_train.outputs.tag }}
+      channel:
+        description: Release channel, such as stable, alpha, or rc.
+        value: ${{ jobs.release_train.outputs.channel }}
+
+permissions:
+  contents: read
+
+jobs:
+  release_train:
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.release.outputs.channel }}
+      tag: ${{ steps.release.outputs.tag }}
+      target_branch: ${{ steps.release.outputs.target_branch }}
+      target_version: ${{ steps.release.outputs.target_version }}
+    steps:
+      - name: Guard write mode
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          echo "revisium-actions v0.2.0 release-train workflow only supports dry_run=true."
+          echo "No branch, commit, or tag was pushed."
+          exit 1
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout revisium-actions helpers
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: revisium/revisium-actions
+          ref: ${{ inputs.actions_ref }}
+          path: .revisium-actions
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+
+      - name: Fetch release refs
+        run: git fetch origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
+
+      - name: Plan release transition
+        id: release
+        env:
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          CURRENT_BRANCH: ${{ github.ref_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PACKAGE_PATH: ${{ inputs.package_path }}
+          RELEASE_ACTION: ${{ inputs.action }}
+        run: node .revisium-actions/bin/plan-release.mjs
+
+      - name: Apply version metadata
+        env:
+          TARGET_VERSION: ${{ steps.release.outputs.target_version }}
+          VERSION_FILES: ${{ inputs.version_files }}
+        run: node .revisium-actions/bin/apply-version-metadata.mjs
+
+      - name: Validate stable runtime dependencies
+        env:
+          PACKAGE_PATH: ${{ inputs.package_path }}
+          TARGET_VERSION: ${{ steps.release.outputs.target_version }}
+        run: node .revisium-actions/bin/check-prerelease-deps.mjs
+
+      - name: Validate release metadata
+        env:
+          TARGET_VERSION: ${{ steps.release.outputs.target_version }}
+          VERSION_FILES: ${{ inputs.version_files }}
+        run: node .revisium-actions/bin/validate-version-metadata.mjs
+
+      - name: Install dependencies
+        if: ${{ inputs.install_command != '' }}
+        env:
+          INSTALL_COMMAND: ${{ inputs.install_command }}
+        run: bash -euo pipefail -c "$INSTALL_COMMAND"
+
+      - name: Validate repository
+        if: ${{ inputs.validate_command != '' }}
+        env:
+          VALIDATE_COMMAND: ${{ inputs.validate_command }}
+        run: bash -euo pipefail -c "$VALIDATE_COMMAND"
+
+      - name: Dry run summary
+        run: |
+          echo "Dry run only. No commit, branch, or tag was pushed."
+          echo "Target branch: ${{ steps.release.outputs.target_branch }}"
+          echo "Target version: ${{ steps.release.outputs.target_version }}"
+          echo "Tag: ${{ steps.release.outputs.tag }}"
+          echo "Channel: ${{ steps.release.outputs.channel }}"
