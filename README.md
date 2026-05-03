@@ -15,7 +15,8 @@ Revisium repositories.
 ## Current Scope
 
 This repository is being built in small migrations. The first supported helpers
-cover release metadata that is currently duplicated across service repositories:
+cover release metadata and shared build workflows that are currently duplicated
+across service and package repositories:
 
 | Helper                              | Purpose                                                                      |
 | ----------------------------------- | ---------------------------------------------------------------------------- |
@@ -23,6 +24,11 @@ cover release metadata that is currently duplicated across service repositories:
 | `actions/validate-version-metadata` | Validate package and optional JSON version files against a target version.   |
 | `actions/check-prerelease-deps`     | Reject prerelease runtime dependencies before stable publication.            |
 | `actions/plan-release`              | Compute release-train branch, version, tag, and channel transitions.         |
+
+| Reusable workflow                    | Purpose                                                             |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `.github/workflows/docker-build.yml` | Build and push Docker images for Revisium service repositories.     |
+| `.github/workflows/node-build.yml`   | Install, validate, and build Node.js repositories from one wrapper. |
 
 ## Release Workflow State Diagram
 
@@ -100,6 +106,34 @@ second helper ref. Set `dry_run: false` and configure
 `RELEASE_BOT_CLIENT_ID` / `RELEASE_BOT_PRIVATE_KEY` to publish a GitHub-verified
 release commit, release branch, and tag.
 
+The build workflows follow the same pattern. Keep the trigger and repo-specific
+branch policy in the caller repository, then call one of the reusable workflows
+with only the shape-specific inputs:
+
+```yaml
+jobs:
+  build:
+    uses: revisium/revisium-actions/.github/workflows/docker-build.yml@v0.3.1
+    with:
+      image_name: ${{ github.event.repository.name }}
+      context: .
+      dockerfile: Dockerfile
+    secrets: inherit
+```
+
+```yaml
+jobs:
+  build:
+    uses: revisium/revisium-actions/.github/workflows/node-build.yml@v0.3.1
+    with:
+      node_version: 24.11.1
+      install_command: npm ci
+      run_commands: |
+        npm run lint
+        npm test
+        npm run build
+```
+
 ## Example
 
 ```yaml
@@ -143,3 +177,5 @@ the real actionlint check in a separate job.
 - [Release bot integration](docs/release-bot.md)
 - [Dry-run release train example](examples/workflows/release-train-dry-run.yml)
 - [Release metadata example workflow](examples/workflows/release-metadata.yml)
+- [Docker build example workflow](examples/workflows/docker-build.yml)
+- [Node build example workflow](examples/workflows/node-build.yml)
