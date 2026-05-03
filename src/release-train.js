@@ -393,3 +393,7 @@ export function formatReleasePlanSummary(plan) {
     `Ref mode: ${plan.refMode}`,
   ].join('\n');
 }
+
+export function buildReleaseCommitMessage(version) {
+  return `chore: release ${version}`;
+}

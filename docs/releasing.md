@@ -5,7 +5,7 @@ references such as:
 
 ```yaml
 uses: revisium/revisium-actions/.github/workflows/docker-build.yml@v1
-uses: revisium/revisium-actions/actions/create-verified-release-commit@v1.0.0
+uses: revisium/revisium-actions/.github/workflows/release-train.yml@v1.0.0
 ```
 
 For this reason, releases are intentionally simple and tag-driven. The first
@@ -33,37 +33,40 @@ Cut `v0.1.0` after the initial repository foundation is ready:
 - ESLint, Prettier, and actionlint pass.
 - CI runs the full validation script.
 
-## `v0.2.0` Release Train Scope
+## `v0.3.0` Release Train Scope
 
-`v0.2.0` introduces the dry-run release train surface. It is intended to test
-alpha, rc, stable, and patch transitions in real repositories before enabling
-write-mode automation.
+`v0.3.0` introduces write-mode release train publishing. It is intended to run
+alpha, rc, stable, and patch transitions in real repositories while keeping the
+consumer workflow small.
 
 The reusable workflow is:
 
 ```yaml
 jobs:
   release-train:
-    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.2.0
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.0
     with:
       action: start-minor-alpha
-      dry_run: true
-      actions_ref: v0.2.0
+      dry_run: false
       install_command: npm ci
       validate_command: |
         npm run typecheck
         npm run build
+    secrets: inherit
 ```
 
 The workflow checks out the caller repository, computes the release train
 transition, applies version metadata in the runner workspace, validates stable
-runtime dependencies, runs the caller's validation commands, and prints the
-target branch, tag, channel, and mode it would use. It does not push branches,
-commits, tags, or releases while `dry_run` is true.
+runtime dependencies, runs the caller's validation commands, and either prints
+the plan in dry-run mode or pushes the release branch and tag in write mode.
 
-Write mode is intentionally blocked in this release. After dry-run behavior is
-proven in consumer repositories, a later release can add GitHub App token-based
-branch and tag creation.
+The workflow checks out helper scripts from the same pinned ref used by `uses`,
+so consumers do not pass a duplicate helper ref.
+
+Write mode requires the caller repository to configure:
+
+- `RELEASE_BOT_CLIENT_ID` as an Actions variable.
+- `RELEASE_BOT_PRIVATE_KEY` as an Actions secret.
 
 ## Manual Release
 

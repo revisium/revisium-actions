@@ -24,32 +24,30 @@ cover release metadata that is currently duplicated across service repositories:
 | `actions/check-prerelease-deps`     | Reject prerelease runtime dependencies before stable publication.            |
 | `actions/plan-release`              | Compute release-train branch, version, tag, and channel transitions.         |
 
-The first reusable workflow is available as a dry-run release train:
+The release train reusable workflow supports dry runs and real branch/tag
+publishing through the release GitHub App:
 
 ```yaml
 jobs:
   release-train:
-    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.2.0
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.0
     with:
       action: ${{ inputs.action }}
       dry_run: true
-      actions_ref: v0.2.0
       node_version: 24.11.1
-      install_command: npm ci
-      validate_command: |
-        npm run typecheck
-        npm run build
+    secrets: inherit
 ```
 
-`release-train.yml` intentionally supports dry-run only in the initial version.
-It computes the same release train transitions used by Revisium service
-repositories, applies metadata in the runner workspace, validates the result,
-and prints the branch/tag it would create without pushing anything.
+The workflow checks out its helper scripts from the same pinned
+`revisium-actions` ref used by `uses`, so caller repositories do not need to pass
+a second helper ref. Set `dry_run: false` and configure
+`RELEASE_BOT_CLIENT_ID` / `RELEASE_BOT_PRIVATE_KEY` to publish a GitHub-verified
+release commit, release branch, and tag.
 
 ## Example
 
 ```yaml
-- uses: revisium/revisium-actions/actions/plan-release@v0.2.0
+- uses: revisium/revisium-actions/actions/plan-release@v0.3.0
   id: release
   with:
     action: start-minor-alpha
