@@ -5,7 +5,7 @@ metadata. This action only plans the transition. It does not create commits,
 branches, tags, or releases.
 
 ```yaml
-- uses: revisium/revisium-actions/actions/plan-release@v0.3.0
+- uses: revisium/revisium-actions/actions/plan-release@v0.3.1
   id: release
   with:
     action: start-minor-alpha

@@ -28,26 +28,31 @@ The release train reusable workflow supports dry runs and real branch/tag
 publishing through the release GitHub App:
 
 ```yaml
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   release-train:
-    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.0
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.1
     with:
       action: ${{ inputs.action }}
       dry_run: true
       node_version: 24.11.1
-    secrets: inherit
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 ```
 
-The workflow checks out its helper scripts from the same pinned
-`revisium-actions` ref used by `uses`, so caller repositories do not need to pass
-a second helper ref. Set `dry_run: false` and configure
+The workflow resolves the exact `revisium-actions` reusable workflow SHA from
+GitHub's workflow-run metadata, so caller repositories do not need to pass a
+second helper ref. Set `dry_run: false` and configure
 `RELEASE_BOT_CLIENT_ID` / `RELEASE_BOT_PRIVATE_KEY` to publish a GitHub-verified
 release commit, release branch, and tag.
 
 ## Example
 
 ```yaml
-- uses: revisium/revisium-actions/actions/plan-release@v0.3.0
+- uses: revisium/revisium-actions/actions/plan-release@v0.3.1
   id: release
   with:
     action: start-minor-alpha

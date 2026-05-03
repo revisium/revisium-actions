@@ -33,18 +33,22 @@ Cut `v0.1.0` after the initial repository foundation is ready:
 - ESLint, Prettier, and actionlint pass.
 - CI runs the full validation script.
 
-## `v0.3.0` Release Train Scope
+## `v0.3.1` Release Train Scope
 
-`v0.3.0` introduces write-mode release train publishing. It is intended to run
+`v0.3.1` supports write-mode release train publishing. It is intended to run
 alpha, rc, stable, and patch transitions in real repositories while keeping the
 consumer workflow small.
 
 The reusable workflow is:
 
 ```yaml
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   release-train:
-    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.0
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.1
     with:
       action: start-minor-alpha
       dry_run: false
@@ -52,7 +56,8 @@ jobs:
       validate_command: |
         npm run typecheck
         npm run build
-    secrets: inherit
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 ```
 
 The workflow checks out the caller repository, computes the release train
@@ -60,8 +65,8 @@ transition, applies version metadata in the runner workspace, validates stable
 runtime dependencies, runs the caller's validation commands, and either prints
 the plan in dry-run mode or pushes the release branch and tag in write mode.
 
-The workflow checks out helper scripts from the same pinned ref used by `uses`,
-so consumers do not pass a duplicate helper ref.
+The workflow resolves the exact `revisium-actions` reusable workflow SHA from
+GitHub's workflow-run metadata, so consumers do not pass a duplicate helper ref.
 
 Write mode requires the caller repository to configure:
 

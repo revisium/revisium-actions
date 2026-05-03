@@ -61,6 +61,7 @@ on:
         value: ${{ jobs.release_train.outputs.channel }}
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -89,19 +90,58 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Checkout revisium-actions helpers
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: revisium/revisium-actions
-          ref: ${{ github.workflow_sha }}
-          path: .revisium-actions
-          persist-credentials: false
-
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ inputs.node_version }}
           cache: npm
+
+      - name: Resolve revisium-actions helper ref
+        id: helper-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_REPOSITORY: ${{ github.repository }}
+          # Trailing @ matches "release-train.yml@<ref>" in referenced_workflows.
+          WORKFLOW_PATH: revisium/revisium-actions/.github/workflows/release-train.yml@
+        run: |
+          node <<'NODE'
+          const fs = await import('node:fs');
+
+          const response = await fetch(
+            `${process.env.GITHUB_API_URL}/repos/${process.env.RUN_REPOSITORY}/actions/runs/${process.env.RUN_ID}`,
+            {
+              headers: {
+                accept: 'application/vnd.github+json',
+                authorization: `Bearer ${process.env.GH_TOKEN}`,
+                'x-github-api-version': '2022-11-28',
+              },
+            },
+          );
+
+          if (!response.ok) {
+            throw new Error(`Failed to read workflow run metadata: ${response.status}`);
+          }
+
+          const run = await response.json();
+          const workflow = run.referenced_workflows?.find(({ path }) =>
+            path.startsWith(process.env.WORKFLOW_PATH),
+          );
+
+          if (!workflow?.sha) {
+            throw new Error('Unable to resolve revisium-actions reusable workflow SHA.');
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `sha=${workflow.sha}\n`);
+          NODE
+
+      - name: Checkout revisium-actions helpers
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: revisium/revisium-actions
+          ref: ${{ steps.helper-ref.outputs.sha }}
+          path: .revisium-actions
+          persist-credentials: false
 
       - name: Create release app token
         id: app-token

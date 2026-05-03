@@ -21,24 +21,18 @@ on:
           - patch
           - patch-alpha-start
           - patch-rc-start
-      dry_run:
-        description: Validate and show the computed release without pushing.
-        required: false
-        default: true
-        type: boolean
-
 permissions:
+  actions: read
   contents: read
 
 jobs:
   release-train:
-    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.0
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.1
     with:
       action: ${{ inputs.action }}
-      dry_run: ${{ inputs.dry_run }}
+      dry_run: true
       node_version: 24.11.1
       install_command: npm ci
       validate_command: |
         npm run typecheck
         npm run build
-    secrets: inherit
