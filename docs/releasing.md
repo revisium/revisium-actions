@@ -12,6 +12,57 @@ For this reason, releases are intentionally simple and tag-driven. The first
 releases are created manually. Do not make releasing this repository depend on
 unreleased code from this repository.
 
+## Release Workflow State Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stable
+
+    Stable --> AlphaTrain: start-minor-alpha\n2.3.4 → 2.4.0-alpha.0
+    Stable --> AlphaTrain: start-major-alpha\n2.3.4 → 3.0.0-alpha.0
+    Stable --> RCTrain: start-minor-rc\n2.3.4 → 2.4.0-rc.0
+    Stable --> RCTrain: start-major-rc\n2.3.4 → 3.0.0-rc.0
+    Stable --> Stable: patch\n2.3.4 → 2.3.5
+    Stable --> AlphaTrain: patch-alpha-start\n2.3.4 → 2.3.5-alpha.0
+    Stable --> RCTrain: patch-rc-start\n2.3.4 → 2.3.5-rc.0
+
+    AlphaTrain --> AlphaTrain: alpha-bump\n2.4.0-alpha.0 → 2.4.0-alpha.1
+    AlphaTrain --> RCTrain: promote-rc\n2.4.0-alpha.1 → 2.4.0-rc.0
+    RCTrain --> RCTrain: rc-bump\n2.4.0-rc.0 → 2.4.0-rc.1
+    RCTrain --> Stable: stable\n2.4.0-rc.1 → 2.4.0
+```
+
+The reusable workflow checks out the caller repository, resolves the exact
+helper SHA from GitHub's workflow-run metadata, and either prints a plan in
+dry-run mode or publishes verified release refs in write mode.
+
+### Branch Model
+
+- `start-minor-*`, `start-major-*`, and `patch-*` actions that create a new
+  release train run from `master`.
+- `alpha-bump`, `promote-rc`, `rc-bump`, `stable`, and `patch` run from the
+  matching `release/X.Y.x` branch.
+
+### Action Options
+
+Use the action that matches the version jump you want to make:
+
+| Action               | Runs from       | Example transition                |
+| -------------------- | --------------- | --------------------------------- |
+| `start-minor-alpha`  | `master`        | `2.3.4` → `2.4.0-alpha.0`         |
+| `start-major-alpha`  | `master`        | `2.3.4` → `3.0.0-alpha.0`         |
+| `start-minor-rc`     | `master`        | `2.3.4` → `2.4.0-rc.0`            |
+| `start-major-rc`     | `master`        | `2.3.4` → `3.0.0-rc.0`            |
+| `start-minor-stable` | `master`        | `2.3.4` → `2.4.0`                 |
+| `start-major-stable` | `master`        | `2.3.4` → `3.0.0`                 |
+| `alpha-bump`         | `release/X.Y.x` | `2.4.0-alpha.0` → `2.4.0-alpha.1` |
+| `promote-rc`         | `release/X.Y.x` | `2.4.0-alpha.1` → `2.4.0-rc.0`    |
+| `rc-bump`            | `release/X.Y.x` | `2.4.0-rc.0` → `2.4.0-rc.1`       |
+| `stable`             | `release/X.Y.x` | `2.4.0-rc.1` → `2.4.0`            |
+| `patch`              | `release/X.Y.x` | `2.4.0` → `2.4.1`                 |
+| `patch-alpha-start`  | `master`        | `2.4.0` → `2.4.1-alpha.0`         |
+| `patch-rc-start`     | `master`        | `2.4.0` → `2.4.1-rc.0`            |
+
 ## Versioning Policy
 
 - Use semver release tags: `v0.1.0`, `v0.2.0`, `v1.0.0`.
