@@ -24,6 +24,33 @@ cover release metadata that is currently duplicated across service repositories:
 | `actions/check-prerelease-deps`     | Reject prerelease runtime dependencies before stable publication.            |
 | `actions/plan-release`              | Compute release-train branch, version, tag, and channel transitions.         |
 
+## Release Workflow Architecture
+
+```mermaid
+flowchart LR
+    Caller["Caller repository"]
+    Dispatch["workflow_dispatch<br/>action + dry_run"]
+    Train["revisium-actions<br/>release-train.yml"]
+    Metadata["GitHub workflow-run metadata<br/>referenced_workflows"]
+    Helpers["Shared release helpers"]
+    Plan["Plan + validate release transition"]
+    DryRun{"dry_run?"}
+    Summary["Print release plan"]
+    Bot["Revisium release GitHub App"]
+    Publish["Create verified commit,<br/>release branch, and tag"]
+
+    Caller --> Dispatch --> Train
+    Train --> Metadata --> Train
+    Train --> Helpers
+    Train --> Plan --> DryRun
+    DryRun -- yes --> Summary
+    DryRun -- no --> Bot --> Publish
+```
+
+The reusable workflow checks out the caller repository, resolves the exact
+helper SHA from GitHub's workflow-run metadata, and either prints a plan in
+dry-run mode or publishes verified release refs in write mode.
+
 The release train reusable workflow supports dry runs and real branch/tag
 publishing through the release GitHub App:
 
