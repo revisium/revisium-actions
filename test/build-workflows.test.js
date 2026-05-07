@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 const readme = fs.readFileSync(`${repoRoot}/README.md`, 'utf8');
+const bootstrapStableWorkflow = fs.readFileSync(
+  `${repoRoot}/.github/workflows/bootstrap-stable.yml`,
+  'utf8',
+);
 const dockerBuild = fs.readFileSync(`${repoRoot}/.github/workflows/docker-build.yml`, 'utf8');
 const nodeBuild = fs.readFileSync(`${repoRoot}/.github/workflows/node-build.yml`, 'utf8');
 const deployWorkflow = fs.readFileSync(`${repoRoot}/.github/workflows/deploy.yml`, 'utf8');
@@ -24,6 +28,7 @@ const npmPublishOidcExample = fs.readFileSync(
 );
 
 test('README documents the shared build workflow helpers', () => {
+  assert.match(readme, /\.github\/workflows\/bootstrap-stable\.yml/);
   assert.match(readme, /\.github\/workflows\/docker-build\.yml/);
   assert.match(readme, /\.github\/workflows\/node-build\.yml/);
   assert.match(readme, /\.github\/workflows\/deploy\.yml/);
@@ -35,6 +40,14 @@ test('README documents the shared build workflow helpers', () => {
   assert.match(readme, /Deploy legacy secrets example workflow/);
   assert.match(readme, /npm-publish\.yml@v0\.3\.1/);
   assert.match(readme, /tags:\n\s+- 'v\*'/);
+});
+
+test('bootstrap stable reusable workflow exposes the baseline release shape', () => {
+  assert.match(bootstrapStableWorkflow, /workflow_call/);
+  assert.match(bootstrapStableWorkflow, /target_version/);
+  assert.match(bootstrapStableWorkflow, /create_github_release/);
+  assert.match(bootstrapStableWorkflow, /Fetch release refs/);
+  assert.match(bootstrapStableWorkflow, /Create release app token/);
 });
 
 test('docker build reusable workflow exposes the service build shape', () => {

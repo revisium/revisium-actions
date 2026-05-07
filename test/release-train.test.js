@@ -124,6 +124,17 @@ test('computeReleasePlan rejects starting while a prerelease train is active', (
   );
 });
 
+test('computeReleasePlan suggests bootstrap-stable when no stable tag exists', () => {
+  assert.throws(
+    () =>
+      computeReleasePlan({
+        ...basePlan,
+        tags: [],
+      }),
+    /bootstrap-stable workflow/,
+  );
+});
+
 test('computeReleasePlan rejects duplicate target branches and tags', () => {
   assert.throws(
     () =>
