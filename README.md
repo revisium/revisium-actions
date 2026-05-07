@@ -28,6 +28,7 @@ are currently duplicated across service and package repositories:
 | Reusable workflow                        | Purpose                                                             |
 | ---------------------------------------- | ------------------------------------------------------------------- |
 | `.github/workflows/bootstrap-stable.yml` | Create the first stable baseline tag and optional GitHub Release.   |
+| `.github/workflows/release-train.yml`    | Plan and publish release-train refs (branch/tag) with dry-run mode. |
 | `.github/workflows/docker-build.yml`     | Build and push Docker images for Revisium service repositories.     |
 | `.github/workflows/node-build.yml`       | Install, validate, and build Node.js repositories from one wrapper. |
 | `.github/workflows/deploy.yml`           | Restart Kubernetes workloads and record GitHub deployments.         |

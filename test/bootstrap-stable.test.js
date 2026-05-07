@@ -174,6 +174,59 @@ test('publishBootstrapStable rolls back the tag ref when release creation fails'
   ]);
 });
 
+test('publishBootstrapStable preserves the release error when tag rollback fails', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    const path = new URL(url).pathname.replace('/repos/revisium/revisium-payment', '');
+    calls.push(`${init.method} ${path}`);
+
+    if (path === '/git/tags') {
+      return new Response(JSON.stringify({ sha: 'tag-object-sha' }), { status: 201 });
+    }
+
+    if (path === '/git/refs') {
+      return new Response(JSON.stringify({ ref: 'refs/tags/v0.1.0' }), { status: 201 });
+    }
+
+    if (path === '/releases') {
+      return new Response('release failed', { status: 500 });
+    }
+
+    if (path === '/git/refs/tags/v0.1.0') {
+      return new Response('rollback failed', { status: 500 });
+    }
+
+    return new Response('unexpected request', { status: 500 });
+  };
+
+  await assert.rejects(
+    () =>
+      publishBootstrapStable({
+        fetchImpl,
+        repository: 'revisium/revisium-payment',
+        tag: 'v0.1.0',
+        targetSha: 'commit-sha',
+        targetVersion: '0.1.0',
+        token: 'token',
+      }),
+    (error) => {
+      assert.match(error.message, /POST \/releases failed with 500: release failed/);
+      assert.match(
+        error.message,
+        /rollback failed: DELETE \/git\/refs\/tags\/v0\.1\.0 failed with 500: rollback failed/,
+      );
+      return true;
+    },
+  );
+
+  assert.deepEqual(calls, [
+    'POST /git/tags',
+    'POST /git/refs',
+    'POST /releases',
+    'DELETE /git/refs/tags/v0.1.0',
+  ]);
+});
+
 test('bootstrap stable workflow and example expose guarded write mode', () => {
   assert.match(workflow, /workflow_call/);
   assert.match(workflow, /target_version/);
@@ -184,4 +237,5 @@ test('bootstrap stable workflow and example expose guarded write mode', () => {
   assert.match(example, /bootstrap-stable\.yml@v0\.3\.5/);
   assert.match(example, /target_version: \$\{\{ inputs\.target_version \}\}/);
   assert.match(example, /dry_run: \$\{\{ inputs\.dry_run \}\}/);
+  assert.match(example, /RELEASE_BOT_PRIVATE_KEY:\s*\$\{\{ secrets\.RELEASE_BOT_PRIVATE_KEY \}\}/);
 });

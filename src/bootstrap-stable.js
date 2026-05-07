@@ -112,7 +112,15 @@ export async function publishBootstrapStable({
       });
       releaseUrl = release.html_url || '';
     } catch (error) {
-      await github('DELETE', `/git/refs/tags/${tag}`);
+      try {
+        await github('DELETE', `/git/refs/tags/${tag}`);
+      } catch (rollbackError) {
+        if (error instanceof Error) {
+          const rollbackMessage =
+            rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          error.message = `${error.message} (rollback failed: ${rollbackMessage})`;
+        }
+      }
       throw error;
     }
   }

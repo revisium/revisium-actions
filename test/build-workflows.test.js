@@ -45,7 +45,9 @@ test('README documents the shared build workflow helpers', () => {
 test('bootstrap stable reusable workflow exposes the baseline release shape', () => {
   assert.match(bootstrapStableWorkflow, /workflow_call/);
   assert.match(bootstrapStableWorkflow, /target_version/);
+  assert.match(bootstrapStableWorkflow, /dry_run/);
   assert.match(bootstrapStableWorkflow, /create_github_release/);
+  assert.match(bootstrapStableWorkflow, /if:\s*\$\{\{\s*inputs\.dry_run == false\s*\}\}/);
   assert.match(bootstrapStableWorkflow, /Fetch release refs/);
   assert.match(bootstrapStableWorkflow, /Create release app token/);
 });
