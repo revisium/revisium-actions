@@ -203,6 +203,10 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   publish:
     uses: revisium/revisium-actions/.github/workflows/npm-publish.yml@v0.3.1
@@ -216,6 +220,10 @@ jobs:
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
+
+Use `contents: read` when `create_github_release: false`. Use
+`contents: write` only when this workflow should create the GitHub Release page.
+Keep `id-token: write` enabled for npm provenance and OIDC publishing.
 
 Use `publish_auth: oidc` when the package is configured for npm trusted
 publishing. That mode uses GitHub OIDC instead of a long-lived npm token, still
