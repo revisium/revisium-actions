@@ -128,6 +128,28 @@ test('publishBootstrapStable creates an annotated tag and release', async () => 
   assert.equal(calls[2].body.tag_name, 'v0.1.0');
 });
 
+test('publishBootstrapStable rejects mismatched tag and targetVersion before API writes', async () => {
+  const calls = [];
+
+  await assert.rejects(
+    () =>
+      publishBootstrapStable({
+        fetchImpl: async (url, init) => {
+          calls.push(`${init.method} ${new URL(url).pathname}`);
+          return new Response('unexpected request', { status: 500 });
+        },
+        repository: 'revisium/revisium-payment',
+        tag: 'v0.1.1',
+        targetSha: 'commit-sha',
+        targetVersion: '0.1.0',
+        token: 'token',
+      }),
+    /tag v0\.1\.1 must match targetVersion 0\.1\.0 \(v0\.1\.0\)/,
+  );
+
+  assert.deepEqual(calls, []);
+});
+
 test('publishBootstrapStable rolls back the tag ref when release creation fails', async () => {
   const calls = [];
   const fetchImpl = async (url, init) => {

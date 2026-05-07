@@ -77,6 +77,12 @@ export async function publishBootstrapStable({
   targetVersion,
   token,
 }) {
+  assertStableVersion(targetVersion);
+  const expectedTag = `v${targetVersion}`;
+  if (tag !== expectedTag) {
+    throw new Error(`tag ${tag} must match targetVersion ${targetVersion} (${expectedTag})`);
+  }
+
   assertSafeGitRef(tag);
 
   const github = (method, path, body) =>
