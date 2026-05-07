@@ -66,6 +66,57 @@ export function formatBootstrapStableSummary(plan) {
   ].join('\n');
 }
 
+function assertBootstrapPublishTag({ tag, targetVersion }) {
+  assertStableVersion(targetVersion);
+  const expectedTag = `v${targetVersion}`;
+  if (tag !== expectedTag) {
+    throw new Error(`tag ${tag} must match targetVersion ${targetVersion} (${expectedTag})`);
+  }
+
+  assertSafeGitRef(tag);
+}
+
+function appendRollbackFailure(error, rollbackError) {
+  if (!(error instanceof Error)) {
+    return;
+  }
+
+  const rollbackMessage =
+    rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+  error.message = `${error.message} (rollback failed: ${rollbackMessage})`;
+}
+
+async function rollbackTagRef({ error, github, tag }) {
+  try {
+    await github('DELETE', `/git/refs/tags/${tag}`);
+  } catch (rollbackError) {
+    appendRollbackFailure(error, rollbackError);
+  }
+}
+
+async function createBootstrapGithubRelease({
+  github,
+  releaseNotes,
+  releaseTitle,
+  tag,
+  targetVersion,
+}) {
+  try {
+    const release = await github('POST', '/releases', {
+      tag_name: tag,
+      name: releaseTitle || tag,
+      body:
+        releaseNotes || `Initial stable baseline ${targetVersion} for release train automation.`,
+      draft: false,
+      prerelease: false,
+    });
+    return release.html_url || '';
+  } catch (error) {
+    await rollbackTagRef({ error, github, tag });
+    throw error;
+  }
+}
+
 export async function publishBootstrapStable({
   createGithubRelease = true,
   fetchImpl,
@@ -77,13 +128,7 @@ export async function publishBootstrapStable({
   targetVersion,
   token,
 }) {
-  assertStableVersion(targetVersion);
-  const expectedTag = `v${targetVersion}`;
-  if (tag !== expectedTag) {
-    throw new Error(`tag ${tag} must match targetVersion ${targetVersion} (${expectedTag})`);
-  }
-
-  assertSafeGitRef(tag);
+  assertBootstrapPublishTag({ tag, targetVersion });
 
   const github = (method, path, body) =>
     githubRequest({ method, path, body, repository, token, fetchImpl });
@@ -104,32 +149,15 @@ export async function publishBootstrapStable({
     sha: tagObject.sha,
   });
 
-  let releaseUrl = '';
-
-  if (createGithubRelease) {
-    try {
-      const release = await github('POST', '/releases', {
-        tag_name: tag,
-        name: releaseTitle || tag,
-        body:
-          releaseNotes || `Initial stable baseline ${targetVersion} for release train automation.`,
-        draft: false,
-        prerelease: false,
-      });
-      releaseUrl = release.html_url || '';
-    } catch (error) {
-      try {
-        await github('DELETE', `/git/refs/tags/${tag}`);
-      } catch (rollbackError) {
-        if (error instanceof Error) {
-          const rollbackMessage =
-            rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-          error.message = `${error.message} (rollback failed: ${rollbackMessage})`;
-        }
-      }
-      throw error;
-    }
-  }
+  const releaseUrl = createGithubRelease
+    ? await createBootstrapGithubRelease({
+        github,
+        releaseNotes,
+        releaseTitle,
+        tag,
+        targetVersion,
+      })
+    : '';
 
   return {
     releaseUrl,
