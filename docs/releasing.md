@@ -74,6 +74,42 @@ Use the action that matches the version jump you want to make:
 - Caller repositories may use major tags such as `@v1` for lower-risk workflows
   like Docker build, deploy, lint, or validation helpers.
 
+## Bootstrap A New Caller Repository
+
+Release train start actions require at least one existing stable `vX.Y.Z` tag.
+For a new caller repository, create that baseline with
+`bootstrap-stable.yml` instead of letting the release train guess history.
+
+The bootstrap workflow must run from the configured base branch, requires the
+target version to match `package.json`, fails if any `v*` tag already exists,
+and can create the GitHub Release page together with the annotated tag.
+
+```yaml
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  bootstrap-stable:
+    uses: revisium/revisium-actions/.github/workflows/bootstrap-stable.yml@v0.3.5
+    with:
+      target_version: 0.1.0
+      dry_run: false
+      base_branch: master
+      node_version: 24.11.1
+      install_command: npm ci
+      validate_command: |
+        npm run lint:ci
+        npm run tsc
+        npm test
+      create_github_release: true
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+```
+
+If a release train fails with `No stable tag found`, run `bootstrap-stable`
+once for the current stable package version, then rerun the release train.
+
 ## When To Cut `v0.1.0`
 
 Cut `v0.1.0` after the initial repository foundation is ready:

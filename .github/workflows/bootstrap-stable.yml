@@ -1,0 +1,219 @@
+name: Reusable Bootstrap Stable
+
+on:
+  workflow_call:
+    inputs:
+      target_version:
+        description: Stable X.Y.Z version that already exists in package metadata.
+        required: true
+        type: string
+      dry_run:
+        description: Validate and show the bootstrap without creating refs.
+        required: false
+        default: true
+        type: boolean
+      base_branch:
+        description: Branch that owns the initial stable baseline.
+        required: false
+        default: master
+        type: string
+      node_version:
+        description: Node.js version used for bootstrap validation.
+        required: false
+        default: 24.11.1
+        type: string
+      package_path:
+        description: Package manifest path to inspect.
+        required: false
+        default: package.json
+        type: string
+      install_command:
+        description: Command that installs repository dependencies.
+        required: false
+        default: npm ci
+        type: string
+      validate_command:
+        description: Command that validates the repository before creating the baseline tag.
+        required: false
+        default: ''
+        type: string
+      create_github_release:
+        description: Create a GitHub Release for the bootstrap tag.
+        required: false
+        default: true
+        type: boolean
+      release_title:
+        description: Optional GitHub Release title. Defaults to the tag.
+        required: false
+        default: ''
+        type: string
+      release_notes:
+        description: Optional GitHub Release notes.
+        required: false
+        default: ''
+        type: string
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY:
+        description: GitHub App private key used when dry_run is false.
+        required: false
+    outputs:
+      target_version:
+        description: Stable version that was bootstrapped.
+        value: ${{ jobs.bootstrap_stable.outputs.target_version }}
+      tag:
+        description: Stable tag that would be or was created.
+        value: ${{ jobs.bootstrap_stable.outputs.tag }}
+      release_url:
+        description: GitHub Release URL when one was created.
+        value: ${{ jobs.bootstrap_stable.outputs.release_url }}
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  bootstrap_stable:
+    runs-on: ubuntu-latest
+    outputs:
+      release_url: ${{ steps.publish.outputs.release_url }}
+      tag: ${{ steps.plan.outputs.tag }}
+      target_version: ${{ steps.plan.outputs.target_version }}
+    steps:
+      - name: Guard write mode
+        if: ${{ inputs.dry_run == false }}
+        env:
+          RELEASE_BOT_CLIENT_ID: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+        run: |
+          if [ -z "$RELEASE_BOT_CLIENT_ID" ] || [ -z "$RELEASE_BOT_PRIVATE_KEY" ]; then
+            echo "dry_run=false requires RELEASE_BOT_CLIENT_ID and RELEASE_BOT_PRIVATE_KEY."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+
+      - name: Resolve revisium-actions helper ref
+        id: helper-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_REPOSITORY: ${{ github.repository }}
+          # Trailing @ matches "bootstrap-stable.yml@<ref>" in referenced_workflows.
+          WORKFLOW_PATH: revisium/revisium-actions/.github/workflows/bootstrap-stable.yml@
+        run: |
+          node <<'NODE'
+          const fs = await import('node:fs');
+
+          const response = await fetch(
+            `${process.env.GITHUB_API_URL}/repos/${process.env.RUN_REPOSITORY}/actions/runs/${process.env.RUN_ID}`,
+            {
+              headers: {
+                accept: 'application/vnd.github+json',
+                authorization: `Bearer ${process.env.GH_TOKEN}`,
+                'x-github-api-version': '2022-11-28',
+              },
+            },
+          );
+
+          if (!response.ok) {
+            throw new Error(`Failed to read workflow run metadata: ${response.status}`);
+          }
+
+          const run = await response.json();
+          const workflow = run.referenced_workflows?.find(({ path }) =>
+            path.startsWith(process.env.WORKFLOW_PATH),
+          );
+
+          if (!workflow?.sha) {
+            throw new Error('Unable to resolve revisium-actions reusable workflow SHA.');
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `sha=${workflow.sha}\n`);
+          NODE
+
+      - name: Checkout revisium-actions helpers
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: revisium/revisium-actions
+          ref: ${{ steps.helper-ref.outputs.sha }}
+          path: .revisium-actions
+          persist-credentials: false
+
+      - name: Create release app token
+        id: app-token
+        if: ${{ inputs.dry_run == false }}
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Fetch release refs
+        env:
+          FETCH_TOKEN: ${{ inputs.dry_run == false && steps.app-token.outputs.token || github.token }}
+        run: |
+          auth_header="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 | tr -d '\n')"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+            fetch origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
+
+      - name: Plan bootstrap stable
+        id: plan
+        env:
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          CURRENT_BRANCH: ${{ github.ref_name }}
+          DRY_RUN: true
+          PACKAGE_PATH: ${{ inputs.package_path }}
+          TARGET_VERSION: ${{ inputs.target_version }}
+        run: node .revisium-actions/bin/bootstrap-stable.mjs
+
+      - name: Install dependencies
+        if: ${{ inputs.install_command != '' }}
+        env:
+          INSTALL_COMMAND: ${{ inputs.install_command }}
+        run: bash -euo pipefail -c "$INSTALL_COMMAND"
+
+      - name: Validate repository
+        if: ${{ inputs.validate_command != '' }}
+        env:
+          VALIDATE_COMMAND: ${{ inputs.validate_command }}
+        run: bash -euo pipefail -c "$VALIDATE_COMMAND"
+
+      - name: Publish bootstrap stable
+        id: publish
+        if: ${{ inputs.dry_run == false }}
+        env:
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          CREATE_GITHUB_RELEASE: ${{ inputs.create_github_release }}
+          CURRENT_BRANCH: ${{ github.ref_name }}
+          DRY_RUN: false
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PACKAGE_PATH: ${{ inputs.package_path }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+          RELEASE_TITLE: ${{ inputs.release_title }}
+          TARGET_VERSION: ${{ inputs.target_version }}
+        run: node .revisium-actions/bin/bootstrap-stable.mjs
+
+      - name: Dry run summary
+        if: ${{ inputs.dry_run == true }}
+        run: |
+          echo "Dry run only. No tag or GitHub Release was created."
+          echo "Target version: ${{ steps.plan.outputs.target_version }}"
+          echo "Tag: ${{ steps.plan.outputs.tag }}"
+
+      - name: Bootstrap summary
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          echo "Bootstrap stable tag was pushed."
+          echo "Target version: ${{ steps.plan.outputs.target_version }}"
+          echo "Tag: ${{ steps.plan.outputs.tag }}"
+          echo "Release URL: ${{ steps.publish.outputs.release_url }}"

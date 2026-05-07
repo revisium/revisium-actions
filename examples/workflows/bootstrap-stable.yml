@@ -1,0 +1,35 @@
+name: Bootstrap Stable
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: Existing package version to tag as the initial stable baseline.
+        required: true
+        type: string
+      dry_run:
+        description: Validate without creating the tag or GitHub Release.
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  bootstrap-stable:
+    uses: revisium/revisium-actions/.github/workflows/bootstrap-stable.yml@v0.3.5
+    with:
+      target_version: ${{ inputs.target_version }}
+      dry_run: ${{ inputs.dry_run }}
+      base_branch: master
+      node_version: 24.11.1
+      install_command: npm ci
+      validate_command: |
+        npm run lint:ci
+        npm run tsc
+        npm test
+      create_github_release: true
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}

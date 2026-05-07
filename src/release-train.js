@@ -190,7 +190,7 @@ function computeStartPlan({
   const lastStableTag = findLatestStableTag(tags);
   if (!lastStableTag) {
     throw new Error(
-      'No stable tag found. Create an initial stable tag before using release trains.',
+      'No stable tag found. Bootstrap the repository first with the bootstrap-stable workflow, or create an initial stable vX.Y.Z tag before using release trains.',
     );
   }
 

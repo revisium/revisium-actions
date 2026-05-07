@@ -1,46 +1,11 @@
 #!/usr/bin/env node
-import fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
-
+import { coerceBoolean, getCurrentBranch, git, lines, writeOutputs } from '../src/cli-utils.js';
 import { readJsonFile, requiredEnv } from '../src/version-metadata.js';
 import {
   computeReleasePlan,
   formatReleasePlanSummary,
   normalizeBranchRef,
 } from '../src/release-train.js';
-
-const gitBinary = '/usr/bin/git';
-
-function git(args, options = {}) {
-  try {
-    return execFileSync(gitBinary, args, {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', options.allowFailure ? 'ignore' : 'pipe'],
-    }).trim();
-  } catch (error) {
-    if (options.allowFailure) return '';
-    throw error;
-  }
-}
-
-function lines(value) {
-  return String(value)
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function coerceBoolean(value) {
-  return value === true || String(value).toLowerCase() === 'true';
-}
-
-function getCurrentBranch() {
-  return (
-    process.env.CURRENT_BRANCH ||
-    process.env.GITHUB_REF_NAME ||
-    git(['branch', '--show-current'], { allowFailure: true })
-  );
-}
 
 function getReleaseRefs() {
   return lines(
@@ -68,13 +33,6 @@ function getReleaseBranchVersions(refs) {
   }
 
   return versions;
-}
-
-function writeOutputs(outputs) {
-  if (!process.env.GITHUB_OUTPUT) return;
-
-  const linesToWrite = Object.entries(outputs).map(([key, value]) => `${key}=${value}`);
-  fs.appendFileSync(process.env.GITHUB_OUTPUT, `${linesToWrite.join('\n')}\n`);
 }
 
 const action = requiredEnv('RELEASE_ACTION');

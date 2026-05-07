@@ -25,12 +25,14 @@ are currently duplicated across service and package repositories:
 | `actions/check-prerelease-deps`     | Reject prerelease runtime dependencies before stable publication.            |
 | `actions/plan-release`              | Compute release-train branch, version, tag, and channel transitions.         |
 
-| Reusable workflow                    | Purpose                                                             |
-| ------------------------------------ | ------------------------------------------------------------------- |
-| `.github/workflows/docker-build.yml` | Build and push Docker images for Revisium service repositories.     |
-| `.github/workflows/node-build.yml`   | Install, validate, and build Node.js repositories from one wrapper. |
-| `.github/workflows/deploy.yml`       | Restart Kubernetes workloads and record GitHub deployments.         |
-| `.github/workflows/npm-publish.yml`  | Validate, publish, and optionally create npm package releases.      |
+| Reusable workflow                        | Purpose                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------- |
+| `.github/workflows/bootstrap-stable.yml` | Create the first stable baseline tag and optional GitHub Release.   |
+| `.github/workflows/release-train.yml`    | Plan and publish release-train refs (branch/tag) with dry-run mode. |
+| `.github/workflows/docker-build.yml`     | Build and push Docker images for Revisium service repositories.     |
+| `.github/workflows/node-build.yml`       | Install, validate, and build Node.js repositories from one wrapper. |
+| `.github/workflows/deploy.yml`           | Restart Kubernetes workloads and record GitHub deployments.         |
+| `.github/workflows/npm-publish.yml`      | Validate, publish, and optionally create npm package releases.      |
 
 ## Release Workflow State Diagram
 
@@ -85,6 +87,32 @@ Use the action that matches the version jump you want to make:
 
 The release train reusable workflow supports dry runs and real branch/tag
 publishing through the release GitHub App:
+
+New caller repositories need one stable baseline tag before release trains can
+start. Use the `bootstrap-stable` reusable workflow once, from the base branch,
+to validate the repository and create the initial `vX.Y.Z` tag:
+
+```yaml
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  bootstrap-stable:
+    uses: revisium/revisium-actions/.github/workflows/bootstrap-stable.yml@v0.3.5
+    with:
+      target_version: 0.1.0
+      dry_run: true
+      node_version: 24.11.1
+      install_command: npm ci
+      validate_command: |
+        npm run lint:ci
+        npm run tsc
+        npm test
+      create_github_release: true
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+```
 
 ```yaml
 permissions:
@@ -234,6 +262,7 @@ the real actionlint check in a separate job.
 
 - [Release instructions](docs/releasing.md)
 - [Release bot integration](docs/release-bot.md)
+- [Bootstrap stable example workflow](examples/workflows/bootstrap-stable.yml)
 - [Dry-run release train example](examples/workflows/release-train-dry-run.yml)
 - [Release metadata example workflow](examples/workflows/release-metadata.yml)
 - [Docker build example workflow](examples/workflows/docker-build.yml)

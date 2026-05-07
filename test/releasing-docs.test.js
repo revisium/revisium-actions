@@ -25,6 +25,7 @@ test('README documents the release workflow architecture', () => {
   assert.match(readme, /### Action Options/);
   assert.match(readme, /Runs from/);
   assert.match(readme, /2\.4\.0-alpha\.1/);
+  assert.match(readme, /bootstrap-stable/);
 });
 
 test('release instructions document the same workflow architecture', () => {
@@ -38,4 +39,6 @@ test('release instructions document the same workflow architecture', () => {
   assert.match(releasing, /### Branch Model/);
   assert.match(releasing, /Runs from/);
   assert.match(releasing, /3\.0\.0-rc\.0/);
+  assert.match(releasing, /Bootstrap A New Caller Repository/);
+  assert.match(releasing, /No stable tag found/);
 });
