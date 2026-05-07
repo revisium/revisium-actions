@@ -110,6 +110,8 @@ test('npm publish reusable workflow exposes the publish shape', () => {
   assert.match(npmPublishWorkflow, /Determine npm tag/);
   assert.match(npmPublishWorkflow, /Publish to npm/);
   assert.match(npmPublishWorkflow, /timeout-minutes: 30/);
+  assert.doesNotMatch(npmPublishWorkflow, /^permissions:/m);
+  assert.doesNotMatch(npmPublishWorkflow, /^\s+contents: write$/m);
   assert.ok(npmPublishWorkflow.includes("const lockRootPackage = lockJson.packages?.[''];"));
   assert.match(npmPublishWorkflow, /if \(lockRootPackage && lockRootVersion !== tagVersion\)/);
 });
