@@ -1,4 +1,4 @@
-import { githubRequest, assertSafeGitRef } from './release-publish.js';
+import { GitHubError, githubRequest, assertSafeGitRef } from './release-publish.js';
 import { normalizeBranchRef, normalizeTagRef, parseVersion } from './release-train.js';
 
 export function assertStableVersion(version) {
@@ -112,7 +112,9 @@ async function createBootstrapGithubRelease({
     });
     return release.html_url || '';
   } catch (error) {
-    await rollbackTagRef({ error, github, tag });
+    if (error instanceof GitHubError) {
+      await rollbackTagRef({ error, github, tag });
+    }
     throw error;
   }
 }

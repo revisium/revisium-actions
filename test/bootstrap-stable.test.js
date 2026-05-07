@@ -196,6 +196,43 @@ test('publishBootstrapStable rolls back the tag ref when release creation fails'
   ]);
 });
 
+test('publishBootstrapStable skips rollback when release creation fails ambiguously', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    const path = new URL(url).pathname.replace('/repos/revisium/revisium-payment', '');
+    calls.push(`${init.method} ${path}`);
+
+    if (path === '/git/tags') {
+      return new Response(JSON.stringify({ sha: 'tag-object-sha' }), { status: 201 });
+    }
+
+    if (path === '/git/refs') {
+      return new Response(JSON.stringify({ ref: 'refs/tags/v0.1.0' }), { status: 201 });
+    }
+
+    if (path === '/releases') {
+      throw new Error('network timeout after release request');
+    }
+
+    return new Response('unexpected request', { status: 500 });
+  };
+
+  await assert.rejects(
+    () =>
+      publishBootstrapStable({
+        fetchImpl,
+        repository: 'revisium/revisium-payment',
+        tag: 'v0.1.0',
+        targetSha: 'commit-sha',
+        targetVersion: '0.1.0',
+        token: 'token',
+      }),
+    /network timeout after release request/,
+  );
+
+  assert.deepEqual(calls, ['POST /git/tags', 'POST /git/refs', 'POST /releases']);
+});
+
 test('publishBootstrapStable preserves the release error when tag rollback fails', async () => {
   const calls = [];
   const fetchImpl = async (url, init) => {
