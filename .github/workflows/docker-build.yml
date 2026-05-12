@@ -23,6 +23,13 @@ on:
         required: false
         default: true
         type: boolean
+      build_args:
+        description: |
+          Build arguments forwarded to docker/build-push-action as `build-args`.
+          Multi-line string, one `KEY=value` per line. Leave empty to pass no args.
+        required: false
+        default: ''
+        type: string
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -85,3 +92,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ inputs.build_args }}
