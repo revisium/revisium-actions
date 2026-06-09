@@ -97,6 +97,27 @@ test('updatePackageVersionFiles rejects locks without root metadata', () => {
   );
 });
 
+test('updatePackageVersionFiles leaves package.json unmodified when lock is malformed', () => {
+  // Atomicity: throw before any write — package.json must be unchanged on error.
+  const cwd = tempDir();
+  const pkgPath = path.join(cwd, 'package.json');
+  writeJson(pkgPath, { name: 'fixture', version: '0.0.0' });
+  writeJson(path.join(cwd, 'package-lock.json'), {
+    name: 'fixture',
+    version: '0.0.0',
+    lockfileVersion: 3,
+    packages: {}, // missing packages[''] root — will throw
+  });
+
+  assert.throws(
+    () => updatePackageVersionFiles(cwd, '1.0.0'),
+    /package-lock\.json does not contain packages\[""\] root metadata/,
+  );
+
+  // package.json must still carry the original version — no partial write.
+  assert.equal(readJson(pkgPath).version, '0.0.0');
+});
+
 test('validateVersionMetadata rejects mismatched package metadata', () => {
   const cwd = tempDir();
   writeJson(path.join(cwd, 'package.json'), { name: 'fixture', version: '1.0.0' });
@@ -140,4 +161,43 @@ test('shouldSkipStableDependencyGuard skips prerelease targets only', () => {
   assert.equal(shouldSkipStableDependencyGuard('1.2.3-rc.0'), true);
   assert.equal(shouldSkipStableDependencyGuard('1.2.3'), false);
   assert.equal(shouldSkipStableDependencyGuard(''), false);
+});
+
+test('updatePackageVersionFiles with no package-lock.json updates only package.json', () => {
+  const cwd = tempDir();
+  writeJson(path.join(cwd, 'package.json'), { name: 'fixture', version: '0.0.0' });
+  // no package-lock.json — pnpm repo
+
+  updatePackageVersionFiles(cwd, '2.0.0');
+
+  assert.equal(readJson(path.join(cwd, 'package.json')).version, '2.0.0');
+  assert.equal(fs.existsSync(path.join(cwd, 'package-lock.json')), false);
+});
+
+test('validateVersionMetadata with no package-lock.json validates only package.json', () => {
+  const cwd = tempDir();
+  writeJson(path.join(cwd, 'package.json'), { name: 'fixture', version: '2.0.0' });
+  // no package-lock.json — pnpm repo
+
+  // must not throw
+  validateVersionMetadata({ cwd, targetVersion: '2.0.0' });
+});
+
+test('applyVersionMetadata with no package-lock.json updates package.json and extra files', () => {
+  const cwd = tempDir();
+  writeJson(path.join(cwd, 'package.json'), { name: 'fixture', version: '0.0.0' });
+  fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
+  writeJson(path.join(cwd, 'src/openapi.json'), { info: { version: '0.0.0' } });
+
+  applyVersionMetadata({ cwd, targetVersion: '3.0.0', versionFiles: 'src/openapi.json' });
+
+  validateVersionMetadata({
+    cwd,
+    targetVersion: '3.0.0',
+    versionFiles: 'src/openapi.json',
+  });
+
+  assert.equal(readJson(path.join(cwd, 'package.json')).version, '3.0.0');
+  assert.equal(readJson(path.join(cwd, 'src/openapi.json')).info.version, '3.0.0');
+  assert.equal(fs.existsSync(path.join(cwd, 'package-lock.json')), false);
 });

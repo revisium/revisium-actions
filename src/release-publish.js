@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
 import { buildReleaseCommitMessage } from './release-train.js';
 import { splitFileList } from './version-metadata.js';
@@ -26,8 +27,10 @@ export function assertSafeGitRef(ref) {
   }
 }
 
-export function releaseCommitFiles(versionFiles = '') {
-  return ['package.json', 'package-lock.json', ...splitFileList(versionFiles)];
+export function releaseCommitFiles(versionFiles = '', cwd = process.cwd()) {
+  const files = ['package.json'];
+  if (fs.existsSync(path.resolve(cwd, 'package-lock.json'))) files.push('package-lock.json');
+  return [...files, ...splitFileList(versionFiles)];
 }
 
 export function releaseCommitSummary({ files, refMode, targetBranch, targetVersion }) {

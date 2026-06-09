@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -10,6 +13,10 @@ import {
   releaseCommitSummary,
 } from '../src/release-publish.js';
 
+function tempDir() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'revisium-actions-'));
+}
+
 const plan = {
   refMode: 'create',
   tag: 'v0.2.0-alpha.0',
@@ -17,10 +24,24 @@ const plan = {
   targetVersion: '0.2.0-alpha.0',
 };
 
-test('releaseCommitFiles includes package metadata and optional version files', () => {
-  assert.deepEqual(releaseCommitFiles('src/openapi.json\nsrc/system.json'), [
+test('releaseCommitFiles includes package-lock.json when it exists in cwd', () => {
+  const cwd = tempDir();
+  fs.writeFileSync(path.join(cwd, 'package-lock.json'), '{}');
+
+  assert.deepEqual(releaseCommitFiles('src/openapi.json\nsrc/system.json', cwd), [
     'package.json',
     'package-lock.json',
+    'src/openapi.json',
+    'src/system.json',
+  ]);
+});
+
+test('releaseCommitFiles omits package-lock.json when absent from cwd', () => {
+  const cwd = tempDir();
+  // no package-lock.json — pnpm repo
+
+  assert.deepEqual(releaseCommitFiles('src/openapi.json\nsrc/system.json', cwd), [
+    'package.json',
     'src/openapi.json',
     'src/system.json',
   ]);
