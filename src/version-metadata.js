@@ -70,19 +70,28 @@ function resolveRepoPath(cwd, relativePath) {
 export function updatePackageVersionFiles(cwd, targetVersion) {
   const packagePath = resolveRepoPath(cwd, 'package.json');
   const packageLockPath = resolveRepoPath(cwd, 'package-lock.json');
-  const pkg = readJsonFile(packagePath);
-  const lock = readJsonFile(packageLockPath);
 
-  pkg.version = targetVersion;
-  lock.version = targetVersion;
+  if (fs.existsSync(packageLockPath)) {
+    // Validate before writing anything so a malformed lock does not leave
+    // package.json partially modified (atomicity: throw before any write).
+    const lock = readJsonFile(packageLockPath);
 
-  if (!lock.packages?.['']) {
-    throw new Error('package-lock.json does not contain packages[""] root metadata');
+    if (!lock.packages?.['']) {
+      throw new Error('package-lock.json does not contain packages[""] root metadata');
+    }
+
+    const pkg = readJsonFile(packagePath);
+    pkg.version = targetVersion;
+    lock.version = targetVersion;
+    lock.packages[''].version = targetVersion;
+
+    writeJsonFile(packagePath, pkg);
+    writeJsonFile(packageLockPath, lock);
+  } else {
+    const pkg = readJsonFile(packagePath);
+    pkg.version = targetVersion;
+    writeJsonFile(packagePath, pkg);
   }
-  lock.packages[''].version = targetVersion;
-
-  writeJsonFile(packagePath, pkg);
-  writeJsonFile(packageLockPath, lock);
 }
 
 export function applyVersionMetadata({ cwd = process.cwd(), targetVersion, versionFiles = '' }) {
@@ -109,12 +118,16 @@ export function validateVersionMetadata({ cwd = process.cwd(), targetVersion, ve
     throw new Error('targetVersion is required');
   }
 
+  const packageLockPath = resolveRepoPath(cwd, 'package-lock.json');
   const pkg = readJsonFile(resolveRepoPath(cwd, 'package.json'));
-  const lock = readJsonFile(resolveRepoPath(cwd, 'package-lock.json'));
 
   assertEqual('package.json version', pkg.version, targetVersion);
-  assertEqual('package-lock.json version', lock.version, targetVersion);
-  assertEqual('package-lock root version', lock.packages?.['']?.version, targetVersion);
+
+  if (fs.existsSync(packageLockPath)) {
+    const lock = readJsonFile(packageLockPath);
+    assertEqual('package-lock.json version', lock.version, targetVersion);
+    assertEqual('package-lock root version', lock.packages?.['']?.version, targetVersion);
+  }
 
   for (const file of splitFileList(versionFiles)) {
     const doc = readJsonFile(resolveRepoPath(cwd, file));

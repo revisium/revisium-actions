@@ -18,3 +18,17 @@ test('release train dry-run example cannot dispatch write mode', () => {
   assert.doesNotMatch(dryRunExample, /dry_run: \$\{\{ inputs\.dry_run \}\}/);
   assert.doesNotMatch(dryRunExample, /description: Validate and show the computed release/);
 });
+
+test('release train declares package_manager input with default npm', () => {
+  assert.match(workflow, /package_manager:/);
+  assert.match(workflow, /default: npm/);
+});
+
+test('release train has conditional pnpm setup step', () => {
+  assert.match(workflow, /pnpm\/action-setup/);
+  assert.match(workflow, /inputs\.package_manager == 'pnpm'/);
+});
+
+test('release train passes package_manager to node cache', () => {
+  assert.match(workflow, /cache: \$\{\{ inputs\.package_manager \}\}/);
+});
