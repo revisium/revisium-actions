@@ -166,10 +166,12 @@ jobs:
           client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
           permission-contents: write
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
 
       - name: Fetch release refs
         env:
-          FETCH_TOKEN: ${{ inputs.dry_run == false && steps.app-token.outputs.token || github.token }}
+          FETCH_TOKEN: ${{ github.token }}
         run: |
           auth_header="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 | tr -d '\n')"
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \

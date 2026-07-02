@@ -32,3 +32,11 @@ test('release train has conditional pnpm setup step', () => {
 test('release train passes package_manager to node cache', () => {
   assert.match(workflow, /cache: \$\{\{ inputs\.package_manager \}\}/);
 });
+
+test('release train fetches refs with github token and publishes with app token', () => {
+  assert.match(workflow, /owner: \$\{\{ github\.repository_owner \}\}/);
+  assert.match(workflow, /repositories: \$\{\{ github\.event\.repository\.name \}\}/);
+  assert.match(workflow, /FETCH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.doesNotMatch(workflow, /FETCH_TOKEN: \$\{\{ inputs\.dry_run == false && steps\.app-token/);
+  assert.match(workflow, /GH_TOKEN: \$\{\{ steps\.app-token\.outputs\.token \}\}/);
+});
