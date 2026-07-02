@@ -23,9 +23,14 @@ on:
         default: 24.11.1
         type: string
       package_manager:
-        description: Package manager used for caching and pnpm setup (npm or pnpm).
+        description: Package manager used for caching and pnpm setup (npm, pnpm, or none).
         required: false
         default: npm
+        type: string
+      version_source:
+        description: Version source used for release planning (package or tag).
+        required: false
+        default: package
         type: string
       package_path:
         description: Package manifest path to inspect.
@@ -99,11 +104,18 @@ jobs:
         if: ${{ inputs.package_manager == 'pnpm' }}
         uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
 
-      - name: Setup Node.js
+      - name: Setup Node.js with package cache
+        if: ${{ inputs.package_manager != 'none' }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ inputs.node_version }}
           cache: ${{ inputs.package_manager }}
+
+      - name: Setup Node.js without package cache
+        if: ${{ inputs.package_manager == 'none' }}
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ inputs.node_version }}
 
       - name: Resolve revisium-actions helper ref
         id: helper-ref
@@ -179,28 +191,34 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           PACKAGE_PATH: ${{ inputs.package_path }}
           RELEASE_ACTION: ${{ inputs.action }}
+          VERSION_SOURCE: ${{ inputs.version_source }}
         run: node .revisium-actions/bin/plan-release.mjs
 
       - name: Apply version metadata
         env:
+          PACKAGE_PATH: ${{ inputs.package_path }}
           TARGET_VERSION: ${{ steps.release.outputs.target_version }}
           VERSION_FILES: ${{ inputs.version_files }}
+          VERSION_SOURCE: ${{ inputs.version_source }}
         run: node .revisium-actions/bin/apply-version-metadata.mjs
 
       - name: Validate stable runtime dependencies
         env:
           PACKAGE_PATH: ${{ inputs.package_path }}
           TARGET_VERSION: ${{ steps.release.outputs.target_version }}
+          VERSION_SOURCE: ${{ inputs.version_source }}
         run: node .revisium-actions/bin/check-prerelease-deps.mjs
 
       - name: Validate release metadata
         env:
+          PACKAGE_PATH: ${{ inputs.package_path }}
           TARGET_VERSION: ${{ steps.release.outputs.target_version }}
           VERSION_FILES: ${{ inputs.version_files }}
+          VERSION_SOURCE: ${{ inputs.version_source }}
         run: node .revisium-actions/bin/validate-version-metadata.mjs
 
       - name: Install dependencies
-        if: ${{ inputs.install_command != '' }}
+        if: ${{ inputs.install_command != '' && (inputs.package_manager != 'none' || inputs.install_command != 'npm ci') }}
         env:
           INSTALL_COMMAND: ${{ inputs.install_command }}
         run: bash -euo pipefail -c "$INSTALL_COMMAND"
@@ -218,9 +236,11 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REF_MODE: ${{ steps.release.outputs.ref_mode }}
           TAG: ${{ steps.release.outputs.tag }}
+          PACKAGE_PATH: ${{ inputs.package_path }}
           TARGET_BRANCH: ${{ steps.release.outputs.target_branch }}
           TARGET_VERSION: ${{ steps.release.outputs.target_version }}
           VERSION_FILES: ${{ inputs.version_files }}
+          VERSION_SOURCE: ${{ inputs.version_source }}
         run: node .revisium-actions/bin/publish-release.mjs
 
       - name: Dry run summary

@@ -60,10 +60,11 @@ dry-run mode or publishes verified release refs in write mode.
 
 ### Branch Model
 
-- `start-minor-*`, `start-major-*`, and `patch-*` actions that create a new
-  release train run from `master`.
-- `alpha-bump`, `promote-rc`, `rc-bump`, `stable`, and `patch` run from the
-  matching `release/X.Y.x` branch.
+- `start-minor-*` and `start-major-*` actions that create a new release train
+  run from `master`.
+- `alpha-bump`, `promote-rc`, `rc-bump`, `stable`, `patch`,
+  `patch-alpha-start`, and `patch-rc-start` run from the matching
+  `release/X.Y.x` branch.
 
 ### Action Options
 
@@ -82,8 +83,8 @@ Use the action that matches the version jump you want to make:
 | `rc-bump`            | `release/X.Y.x` | `2.4.0-rc.0` → `2.4.0-rc.1`       |
 | `stable`             | `release/X.Y.x` | `2.4.0-rc.1` → `2.4.0`            |
 | `patch`              | `release/X.Y.x` | `2.4.0` → `2.4.1`                 |
-| `patch-alpha-start`  | `master`        | `2.4.0` → `2.4.1-alpha.0`         |
-| `patch-rc-start`     | `master`        | `2.4.0` → `2.4.1-rc.0`            |
+| `patch-alpha-start`  | `release/X.Y.x` | `2.4.0` → `2.4.1-alpha.0`         |
+| `patch-rc-start`     | `release/X.Y.x` | `2.4.0` → `2.4.1-rc.0`            |
 
 The release train reusable workflow supports dry runs and real branch/tag
 publishing through the release GitHub App:
@@ -114,6 +115,11 @@ jobs:
       RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 ```
 
+Repositories without package metadata can bootstrap manually by creating an
+initial stable tag such as `v0.0.0` or `v0.1.0` on the base branch. Use
+`version_source: tag` in release train callers for those repositories; start
+actions will treat that stable tag as the version baseline.
+
 ```yaml
 permissions:
   actions: read
@@ -130,11 +136,39 @@ jobs:
       RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 ```
 
+For repositories without `package.json`, use tag-sourced planning and disable the
+Node package manager cache/install defaults:
+
+```yaml
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  release-train:
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.1
+    with:
+      action: ${{ inputs.action }}
+      dry_run: true
+      node_version: 24.11.1
+      version_source: tag
+      package_manager: none
+      install_command: ''
+      validate_command: ''
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+```
+
 The workflow resolves the exact `revisium-actions` reusable workflow SHA from
 GitHub's workflow-run metadata, so caller repositories do not need to pass a
 second helper ref. Set `dry_run: false` and configure
 `RELEASE_BOT_CLIENT_ID` / `RELEASE_BOT_PRIVATE_KEY` to publish a GitHub-verified
 release commit, release branch, and tag.
+
+When tag-sourced planning has no package or `version_files` metadata to update,
+write mode creates or updates the release branch and tag at the checked-out
+`HEAD`. In that pure tag-only path there is no GitHub App verified release
+commit; the release summary reports that no verification reason exists.
 
 The build workflows follow the same pattern. Keep the trigger and repo-specific
 branch policy in the caller repository, then call one of the reusable workflows

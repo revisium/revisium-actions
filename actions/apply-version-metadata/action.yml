@@ -8,11 +8,21 @@ inputs:
     description: Newline-separated JSON files whose version or info.version should be updated.
     required: false
     default: ''
+  package-path:
+    description: Package manifest path to update when package metadata is enabled.
+    required: false
+    default: package.json
+  version-source:
+    description: Version source used by the caller (package or tag).
+    required: false
+    default: package
 runs:
   using: composite
   steps:
     - shell: bash
       env:
+        PACKAGE_PATH: ${{ inputs.package-path }}
         TARGET_VERSION: ${{ inputs.target-version }}
         VERSION_FILES: ${{ inputs.version-files }}
+        VERSION_SOURCE: ${{ inputs.version-source }}
       run: node "$GITHUB_ACTION_PATH/../../bin/apply-version-metadata.mjs"

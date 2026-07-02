@@ -24,13 +24,33 @@ test('release train declares package_manager input with default npm', () => {
   assert.match(workflow, /default: npm/);
 });
 
+test('release train declares version_source input with backward-compatible package default', () => {
+  assert.match(workflow, /version_source:/);
+  assert.match(workflow, /default: package/);
+});
+
 test('release train has conditional pnpm setup step', () => {
   assert.match(workflow, /pnpm\/action-setup/);
   assert.match(workflow, /inputs\.package_manager == 'pnpm'/);
 });
 
 test('release train passes package_manager to node cache', () => {
+  assert.match(workflow, /Setup Node\.js with package cache/);
+  assert.match(workflow, /inputs\.package_manager != 'none'/);
   assert.match(workflow, /cache: \$\{\{ inputs\.package_manager \}\}/);
+});
+
+test('release train supports package_manager none without setup-node cache', () => {
+  assert.match(workflow, /Setup Node\.js without package cache/);
+  assert.match(workflow, /inputs\.package_manager == 'none'/);
+  assert.match(
+    workflow,
+    /inputs\.install_command != '' && \(inputs\.package_manager != 'none' \|\| inputs\.install_command != 'npm ci'\)/,
+  );
+});
+
+test('release train passes version source through release helper steps', () => {
+  assert.match(workflow, /VERSION_SOURCE: \$\{\{ inputs\.version_source \}\}/);
 });
 
 test('release train fetches refs with github token and publishes with app token', () => {

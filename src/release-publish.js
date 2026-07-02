@@ -27,9 +27,20 @@ export function assertSafeGitRef(ref) {
   }
 }
 
-export function releaseCommitFiles(versionFiles = '', cwd = process.cwd()) {
-  const files = ['package.json'];
-  if (fs.existsSync(path.resolve(cwd, 'package-lock.json'))) files.push('package-lock.json');
+export function releaseCommitFiles(
+  versionFiles = '',
+  cwd = process.cwd(),
+  { includePackageMetadata = true, packagePath = 'package.json' } = {},
+) {
+  const normalizedPackagePath = packagePath.replaceAll('\\', '/');
+  const files = includePackageMetadata ? [normalizedPackagePath] : [];
+  const packageLockPath = path.posix.join(
+    path.posix.dirname(normalizedPackagePath),
+    'package-lock.json',
+  );
+  if (includePackageMetadata && fs.existsSync(path.resolve(cwd, packageLockPath))) {
+    files.push(packageLockPath);
+  }
   return [...files, ...splitFileList(versionFiles)];
 }
 
@@ -38,7 +49,7 @@ export function releaseCommitSummary({ files, refMode, targetBranch, targetVersi
     `Target branch: ${targetBranch}`,
     `Target version: ${targetVersion}`,
     `Ref mode: ${refMode}`,
-    `Files: ${files.join(', ')}`,
+    `Files: ${files.length > 0 ? files.join(', ') : '(none)'}`,
   ].join('\n');
 }
 
@@ -172,20 +183,28 @@ export async function publishRelease({
 
   const github = (method, path, body) =>
     githubRequest({ method, path, body, repository, token, fetchImpl });
-  const baseCommit = await github('GET', `/git/commits/${baseSha}`);
-  const tree = await github('POST', '/git/trees', {
-    base_tree: baseCommit.tree.sha,
-    tree: await commitFileEntries({ files, github }),
-  });
-  const commit = await github('POST', '/git/commits', {
-    message: buildReleaseCommitMessage(targetVersion),
-    tree: tree.sha,
-    parents: [baseSha],
-  });
+  let releaseSha = baseSha;
+  let verificationReason = '';
 
-  if (!commit.verification?.verified) {
-    const reason = commit.verification?.reason || 'unknown';
-    throw new Error(`GitHub did not verify the release bot commit (${reason})`);
+  if (files.length > 0) {
+    const baseCommit = await github('GET', `/git/commits/${baseSha}`);
+    const tree = await github('POST', '/git/trees', {
+      base_tree: baseCommit.tree.sha,
+      tree: await commitFileEntries({ files, github }),
+    });
+    const commit = await github('POST', '/git/commits', {
+      message: buildReleaseCommitMessage(targetVersion),
+      tree: tree.sha,
+      parents: [baseSha],
+    });
+
+    if (!commit.verification?.verified) {
+      const reason = commit.verification?.reason || 'unknown';
+      throw new Error(`GitHub did not verify the release bot commit (${reason})`);
+    }
+
+    releaseSha = commit.sha;
+    verificationReason = commit.verification.reason || '';
   }
 
   const originalBranchSha =
@@ -195,7 +214,7 @@ export async function publishRelease({
     github,
     refMode,
     targetBranch,
-    commitSha: commit.sha,
+    commitSha: releaseSha,
   });
   const branchRef = `refs/heads/${targetBranch}`;
   const tagRef = `refs/tags/${tag}`;
@@ -203,15 +222,15 @@ export async function publishRelease({
     github,
     refMode,
     targetBranch,
-    commitSha: commit.sha,
+    commitSha: releaseSha,
     originalBranchSha,
     tag,
   });
 
   return {
     branchRef,
-    commitSha: commit.sha,
+    commitSha: releaseSha,
     tagRef,
-    verificationReason: commit.verification.reason || '',
+    verificationReason,
   };
 }

@@ -20,6 +20,10 @@ inputs:
     description: Package manifest path to inspect.
     required: false
     default: package.json
+  version-source:
+    description: Version source used for release planning (package or tag).
+    required: false
+    default: package
 outputs:
   action:
     description: Planned release train action.
@@ -63,4 +67,5 @@ runs:
         DRY_RUN: ${{ inputs.dry-run }}
         PACKAGE_PATH: ${{ inputs.package-path }}
         RELEASE_ACTION: ${{ inputs.action }}
+        VERSION_SOURCE: ${{ inputs.version-source }}
       run: node "$GITHUB_ACTION_PATH/../../bin/plan-release.mjs"

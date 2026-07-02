@@ -16,7 +16,7 @@ export const releaseTrainActions = [
 
 const releaseBranchPattern = /^release\/(\d+)\.(\d+)\.x$/;
 const versionPattern = /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|rc)\.(\d+))?$/;
-const stableTagPattern = /^v(\d+)\.(\d+)\.(\d+)$/;
+const releaseTagPattern = /^v(.+)$/;
 
 export function normalizeBranchRef(ref) {
   return String(ref)
@@ -88,27 +88,74 @@ function compareStableVersions(left, right) {
   return 0;
 }
 
+function prereleaseRank(prerelease) {
+  if (!prerelease) return 2;
+  if (prerelease.channel === 'rc') return 1;
+  return 0;
+}
+
+function compareReleaseVersions(left, right) {
+  const stableComparison = compareStableVersions(left, right);
+  if (stableComparison !== 0) return stableComparison;
+
+  const leftRank = prereleaseRank(left.prerelease);
+  const rightRank = prereleaseRank(right.prerelease);
+  if (leftRank !== rightRank) return leftRank - rightRank;
+  if (!left.prerelease || !right.prerelease) return 0;
+  return left.prerelease.number - right.prerelease.number;
+}
+
+function parseReleaseTag(tagRef) {
+  const tag = normalizeTagRef(tagRef);
+  const match = releaseTagPattern.exec(tag);
+  if (!match) return null;
+
+  try {
+    return {
+      tag,
+      version: parseVersion(match[1]),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function findLatestStableTag(tags = []) {
   const stableTags = [];
 
   for (const tagRef of tags) {
-    const tag = normalizeTagRef(tagRef);
-    const match = stableTagPattern.exec(tag);
-    if (!match) continue;
+    const parsedTag = parseReleaseTag(tagRef);
+    if (!parsedTag || parsedTag.version.prerelease) continue;
 
-    stableTags.push({
-      tag,
-      version: {
-        major: Number(match[1]),
-        minor: Number(match[2]),
-        patch: Number(match[3]),
-        prerelease: null,
-      },
-    });
+    stableTags.push(parsedTag);
   }
 
   stableTags.sort((left, right) => compareStableVersions(left.version, right.version));
   return stableTags.at(-1)?.tag || '';
+}
+
+export function inferLatestReleaseBranchVersion({ branch, tags = [] }) {
+  const parsedBranch = parseReleaseBranch(branch);
+  if (!parsedBranch) {
+    throw new Error(`Expected release branch release/X.Y.x. Current branch: ${branch}`);
+  }
+
+  const branchTags = [];
+  for (const tagRef of tags) {
+    const parsedTag = parseReleaseTag(tagRef);
+    if (!parsedTag) continue;
+
+    if (
+      parsedTag.version.major === parsedBranch.major &&
+      parsedTag.version.minor === parsedBranch.minor
+    ) {
+      branchTags.push(parsedTag);
+    }
+  }
+
+  branchTags.sort((left, right) => compareReleaseVersions(left.version, right.version));
+  const latest = branchTags.at(-1);
+  return latest ? formatVersion(latest.version) : '';
 }
 
 function tagExists(tags, tag) {
@@ -322,13 +369,17 @@ export function computeReleasePlan({
   dryRun = true,
   releaseBranches = [],
   releaseBranchVersions = {},
+  sourceTags,
   tags = [],
 }) {
   assertReleaseAction(action);
   if (!currentBranch) throw new Error('currentBranch is required');
-  if (!currentVersion) throw new Error('currentVersion is required');
+  if (!action.startsWith('start-') && !currentVersion) {
+    throw new Error('currentVersion is required');
+  }
 
   const normalizedCurrentBranch = normalizeBranchRef(currentBranch);
+  const releaseSourceTags = sourceTags || tags;
   const plan = action.startsWith('start-')
     ? computeStartPlan({
         action,
@@ -342,7 +393,7 @@ export function computeReleasePlan({
         action,
         currentBranch: normalizedCurrentBranch,
         currentVersion,
-        tags,
+        tags: releaseSourceTags,
       });
 
   const targetVersion = parseVersion(plan.targetVersion);
@@ -384,7 +435,6 @@ export function formatReleasePlanSummary(plan) {
     `Action: ${plan.action}`,
     `Mode: ${plan.dryRun ? 'dry-run' : 'write'}`,
     `Current branch: ${plan.currentBranch}`,
-    `Current version: ${plan.currentVersion}`,
     `Last stable tag: ${plan.lastStableTag || '(none)'}`,
     `Target branch: ${plan.targetBranch}`,
     `Target version: ${plan.targetVersion}`,

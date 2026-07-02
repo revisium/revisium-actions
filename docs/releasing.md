@@ -38,10 +38,11 @@ dry-run mode or publishes verified release refs in write mode.
 
 ### Branch Model
 
-- `start-minor-*`, `start-major-*`, and `patch-*` actions that create a new
-  release train run from `master`.
-- `alpha-bump`, `promote-rc`, `rc-bump`, `stable`, and `patch` run from the
-  matching `release/X.Y.x` branch.
+- `start-minor-*` and `start-major-*` actions that create a new release train
+  run from `master`.
+- `alpha-bump`, `promote-rc`, `rc-bump`, `stable`, `patch`,
+  `patch-alpha-start`, and `patch-rc-start` run from the matching
+  `release/X.Y.x` branch.
 
 ### Action Options
 
@@ -60,8 +61,8 @@ Use the action that matches the version jump you want to make:
 | `rc-bump`            | `release/X.Y.x` | `2.4.0-rc.0` → `2.4.0-rc.1`       |
 | `stable`             | `release/X.Y.x` | `2.4.0-rc.1` → `2.4.0`            |
 | `patch`              | `release/X.Y.x` | `2.4.0` → `2.4.1`                 |
-| `patch-alpha-start`  | `master`        | `2.4.0` → `2.4.1-alpha.0`         |
-| `patch-rc-start`     | `master`        | `2.4.0` → `2.4.1-rc.0`            |
+| `patch-alpha-start`  | `release/X.Y.x` | `2.4.0` → `2.4.1-alpha.0`         |
+| `patch-rc-start`     | `release/X.Y.x` | `2.4.0` → `2.4.1-rc.0`            |
 
 ## Versioning Policy
 
@@ -110,6 +111,11 @@ jobs:
 If a release train fails with `No stable tag found`, run `bootstrap-stable`
 once for the current stable package version, then rerun the release train.
 
+Repositories without package metadata can bootstrap manually by creating an
+initial stable tag such as `v0.0.0` or `v0.1.0` on the base branch. Use
+`version_source: tag` in release train callers for those repositories; start
+actions will treat that stable tag as the version baseline.
+
 ## When To Cut `v0.1.0`
 
 Cut `v0.1.0` after the initial repository foundation is ready:
@@ -147,10 +153,38 @@ jobs:
       RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 ```
 
+For repositories without `package.json`, use tag-sourced planning and disable the
+Node package manager cache/install defaults:
+
+```yaml
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  release-train:
+    uses: revisium/revisium-actions/.github/workflows/release-train.yml@v0.3.1
+    with:
+      action: ${{ inputs.action }}
+      dry_run: true
+      node_version: 24.11.1
+      version_source: tag
+      package_manager: none
+      install_command: ''
+      validate_command: ''
+    secrets:
+      RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+```
+
 The workflow checks out the caller repository, computes the release train
 transition, applies version metadata in the runner workspace, validates stable
 runtime dependencies, runs the caller's validation commands, and either prints
 the plan in dry-run mode or pushes the release branch and tag in write mode.
+
+When tag-sourced planning has no package or `version_files` metadata to update,
+write mode creates or updates the release branch and tag at the checked-out
+`HEAD`. In that pure tag-only path there is no GitHub App verified release
+commit; the release summary reports that no verification reason exists.
 
 The workflow resolves the exact `revisium-actions` reusable workflow SHA from
 GitHub's workflow-run metadata, so consumers do not pass a duplicate helper ref.

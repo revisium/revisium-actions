@@ -8,6 +8,7 @@ import {
   applyVersionMetadata,
   findPrereleaseRuntimeDependencyViolations,
   getJsonVersion,
+  hasPackageMetadata,
   setJsonVersion,
   shouldSkipStableDependencyGuard,
   splitFileList,
@@ -200,4 +201,63 @@ test('applyVersionMetadata with no package-lock.json updates package.json and ex
   assert.equal(readJson(path.join(cwd, 'package.json')).version, '3.0.0');
   assert.equal(readJson(path.join(cwd, 'src/openapi.json')).info.version, '3.0.0');
   assert.equal(fs.existsSync(path.join(cwd, 'package-lock.json')), false);
+});
+
+test('optional package metadata mode updates only version files when package.json is absent', () => {
+  const cwd = tempDir();
+  fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
+  writeJson(path.join(cwd, 'src/openapi.json'), { info: { version: '0.0.0' } });
+
+  applyVersionMetadata({
+    cwd,
+    packageMetadata: 'optional',
+    targetVersion: '4.0.0',
+    versionFiles: 'src/openapi.json',
+  });
+  validateVersionMetadata({
+    cwd,
+    packageMetadata: 'optional',
+    targetVersion: '4.0.0',
+    versionFiles: 'src/openapi.json',
+  });
+
+  assert.equal(hasPackageMetadata(cwd), false);
+  assert.equal(readJson(path.join(cwd, 'src/openapi.json')).info.version, '4.0.0');
+});
+
+test('optional package metadata mode is a no-op when no metadata files exist', () => {
+  const cwd = tempDir();
+
+  applyVersionMetadata({
+    cwd,
+    packageMetadata: 'optional',
+    targetVersion: '4.1.0',
+  });
+  validateVersionMetadata({
+    cwd,
+    packageMetadata: 'optional',
+    targetVersion: '4.1.0',
+  });
+
+  assert.equal(fs.existsSync(path.join(cwd, 'package.json')), false);
+});
+
+test('hasPackageMetadata rejects directories', () => {
+  const cwd = tempDir();
+  fs.mkdirSync(path.join(cwd, 'package.json'));
+
+  assert.equal(hasPackageMetadata(cwd), false);
+});
+
+test('required package metadata mode still rejects missing package.json', () => {
+  const cwd = tempDir();
+
+  assert.throws(
+    () =>
+      applyVersionMetadata({
+        cwd,
+        targetVersion: '4.2.0',
+      }),
+    /package\.json/,
+  );
 });

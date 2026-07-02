@@ -9,6 +9,10 @@ inputs:
     description: Package manifest path to inspect.
     required: false
     default: package.json
+  version-source:
+    description: Version source used by the caller (package or tag).
+    required: false
+    default: package
 runs:
   using: composite
   steps:
@@ -16,4 +20,5 @@ runs:
       env:
         TARGET_VERSION: ${{ inputs.target-version }}
         PACKAGE_PATH: ${{ inputs.package-path }}
+        VERSION_SOURCE: ${{ inputs.version-source }}
       run: node "$GITHUB_ACTION_PATH/../../bin/check-prerelease-deps.mjs"
