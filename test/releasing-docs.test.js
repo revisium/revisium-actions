@@ -13,6 +13,12 @@ function getMermaidBlock(doc) {
   return match[1];
 }
 
+function getTagSourceExample(doc) {
+  const match = doc.match(/```yaml\s*([\s\S]*?version_source: tag[\s\S]*?)```/);
+  assert.ok(match, 'Missing tag-sourced release train example');
+  return match[1];
+}
+
 test('README documents the release workflow architecture', () => {
   assert.match(readme, /## Release Workflow State Diagram/);
   const diagram = getMermaidBlock(readme);
@@ -26,6 +32,7 @@ test('README documents the release workflow architecture', () => {
   assert.match(readme, /Runs from/);
   assert.match(readme, /2\.4\.0-alpha\.1/);
   assert.match(readme, /bootstrap-stable/);
+  assert.match(getTagSourceExample(readme), /permissions:\s+actions: read\s+contents: read/);
 });
 
 test('release instructions document the same workflow architecture', () => {
@@ -41,4 +48,5 @@ test('release instructions document the same workflow architecture', () => {
   assert.match(releasing, /3\.0\.0-rc\.0/);
   assert.match(releasing, /Bootstrap A New Caller Repository/);
   assert.match(releasing, /No stable tag found/);
+  assert.match(getTagSourceExample(releasing), /permissions:\s+actions: read\s+contents: read/);
 });

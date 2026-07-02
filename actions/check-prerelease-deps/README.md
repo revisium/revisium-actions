@@ -11,4 +11,5 @@ versions.
 
 By default, the action checks `package.json`. It intentionally ignores
 `devDependencies`. When `target-version` is an alpha or rc prerelease, the check
-is skipped.
+is skipped. Set `version-source: tag` for tag-only repositories; if no package
+metadata exists, the stable dependency guard is skipped.

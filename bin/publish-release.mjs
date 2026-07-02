@@ -7,7 +7,7 @@ import {
   releaseCommitFiles,
   releaseCommitSummary,
 } from '../src/release-publish.js';
-import { requiredEnv } from '../src/version-metadata.js';
+import { hasPackageMetadata, requiredEnv } from '../src/version-metadata.js';
 
 const gitBinary = '/usr/bin/git';
 
@@ -23,7 +23,19 @@ function appendOutput(name, value) {
   appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
 }
 
-const files = releaseCommitFiles(process.env.VERSION_FILES || '');
+const packagePath = process.env.PACKAGE_PATH || 'package.json';
+const versionSource = process.env.VERSION_SOURCE || 'package';
+
+if (!['package', 'tag'].includes(versionSource)) {
+  throw new Error(`VERSION_SOURCE must be package or tag, got ${versionSource}`);
+}
+
+const includePackageMetadata =
+  versionSource === 'package' || hasPackageMetadata(process.cwd(), packagePath);
+const files = releaseCommitFiles(process.env.VERSION_FILES || '', process.cwd(), {
+  includePackageMetadata,
+  packagePath,
+});
 const refMode = requiredEnv('REF_MODE');
 const targetBranch = requiredEnv('TARGET_BRANCH');
 const targetVersion = requiredEnv('TARGET_VERSION');
@@ -43,7 +55,11 @@ appendOutput('commit_sha', result.commitSha);
 appendOutput('tag_ref', result.tagRef);
 appendOutput('verification_reason', result.verificationReason);
 
-console.log('Created verified GitHub App release commit.');
+if (files.length > 0) {
+  console.log('Created verified GitHub App release commit.');
+} else {
+  console.log('No release metadata files changed; publishing refs at checked-out HEAD.');
+}
 console.log('Created release branch and tag refs.');
-console.log(`Verification reason: ${result.verificationReason || 'unknown'}`);
+console.log(`Verification reason: ${result.verificationReason || '(none)'}`);
 console.log(releaseCommitSummary({ files, refMode, targetBranch, targetVersion }));

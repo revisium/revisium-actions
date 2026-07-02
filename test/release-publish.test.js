@@ -47,6 +47,28 @@ test('releaseCommitFiles omits package-lock.json when absent from cwd', () => {
   ]);
 });
 
+test('releaseCommitFiles can omit package metadata for tag-only repositories', () => {
+  const cwd = tempDir();
+
+  assert.deepEqual(
+    releaseCommitFiles('src/openapi.json\nsrc/system.json', cwd, {
+      includePackageMetadata: false,
+    }),
+    ['src/openapi.json', 'src/system.json'],
+  );
+});
+
+test('releaseCommitFiles normalizes package metadata paths for GitHub trees', () => {
+  const cwd = tempDir();
+  fs.mkdirSync(path.join(cwd, 'packages/api'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'packages/api/package-lock.json'), '{}');
+
+  assert.deepEqual(releaseCommitFiles('', cwd, { packagePath: 'packages\\api\\package.json' }), [
+    'packages/api/package.json',
+    'packages/api/package-lock.json',
+  ]);
+});
+
 test('releaseCommitSummary describes publish metadata', () => {
   assert.match(
     releaseCommitSummary({
@@ -148,6 +170,105 @@ test('publishRelease creates verified commit, branch ref, and tag ref', async ()
     parents: ['base-sha'],
     tree: 'tree-sha',
   });
+});
+
+test('publishRelease without metadata files creates branch and tag at base SHA', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({
+      body: options.body ? JSON.parse(options.body) : null,
+      method: options.method,
+      path: new URL(url).pathname.replace('/repos/revisium/docs', ''),
+    });
+
+    if (calls.at(-1).path === '/git/refs') {
+      return Response.json({});
+    }
+
+    throw new Error(`Unexpected API path: ${calls.at(-1).path}`);
+  };
+
+  const result = await publishRelease({
+    baseSha: 'base-sha',
+    files: [],
+    repository: 'revisium/docs',
+    token: 'token',
+    fetchImpl,
+    ...plan,
+  });
+
+  assert.deepEqual(result, {
+    branchRef: 'refs/heads/release/0.2.x',
+    commitSha: 'base-sha',
+    tagRef: 'refs/tags/v0.2.0-alpha.0',
+    verificationReason: '',
+  });
+  assert.deepEqual(
+    calls.map(({ method, path }) => `${method} ${path}`),
+    ['POST /git/refs', 'POST /git/refs'],
+  );
+  assert.deepEqual(calls[0].body, {
+    ref: 'refs/heads/release/0.2.x',
+    sha: 'base-sha',
+  });
+  assert.deepEqual(calls[1].body, {
+    ref: 'refs/tags/v0.2.0-alpha.0',
+    sha: 'base-sha',
+  });
+});
+
+test('publishRelease without metadata files rolls back an updated branch when tag creation fails', async () => {
+  const calls = [];
+  let branchReads = 0;
+  const fetchImpl = async (url, options) => {
+    const call = {
+      body: options.body ? JSON.parse(options.body) : null,
+      method: options.method,
+      path: new URL(url).pathname.replace('/repos/revisium/docs', ''),
+    };
+    calls.push(call);
+
+    if (call.path === '/git/ref/heads/release/0.2.x') {
+      branchReads += 1;
+      return Response.json({
+        object: {
+          sha: branchReads === 1 ? 'previous-branch-sha' : 'base-sha',
+        },
+      });
+    }
+    if (call.path === '/git/refs/heads/release/0.2.x') {
+      return Response.json({});
+    }
+    if (call.path === '/git/refs') {
+      return new Response('tag already exists', { status: 422 });
+    }
+
+    throw new Error(`Unexpected API path: ${call.path}`);
+  };
+
+  await assert.rejects(
+    () =>
+      publishRelease({
+        baseSha: 'base-sha',
+        files: [],
+        ...plan,
+        refMode: 'update',
+        repository: 'revisium/docs',
+        token: 'token',
+        fetchImpl,
+      }),
+    (error) => error instanceof GitHubError && error.status === 422,
+  );
+  assert.deepEqual(
+    calls.map(({ method, path }) => `${method} ${path}`),
+    [
+      'GET /git/ref/heads/release/0.2.x',
+      'PATCH /git/refs/heads/release/0.2.x',
+      'POST /git/refs',
+      'GET /git/ref/heads/release/0.2.x',
+      'PATCH /git/refs/heads/release/0.2.x',
+    ],
+  );
 });
 
 test('publishRelease rolls back an updated branch when tag creation fails', async () => {

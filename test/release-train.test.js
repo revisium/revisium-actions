@@ -6,6 +6,7 @@ import {
   findLatestStableTag,
   formatReleasePlanSummary,
   getReleaseChannel,
+  inferLatestReleaseBranchVersion,
   normalizeBranchRef,
   parseVersion,
 } from '../src/release-train.js';
@@ -45,6 +46,26 @@ test('parseVersion supports stable, alpha, and rc versions', () => {
 
 test('findLatestStableTag ignores prerelease tags', () => {
   assert.equal(findLatestStableTag(['v0.2.0-alpha.0', 'v0.1.9', 'v0.1.10']), 'v0.1.10');
+});
+
+test('inferLatestReleaseBranchVersion selects the latest reachable tag on the branch line', () => {
+  assert.equal(
+    inferLatestReleaseBranchVersion({
+      branch: 'release/0.2.x',
+      tags: ['v0.1.9', 'v0.2.0-alpha.0', 'v0.2.0-rc.0', 'v0.3.0', 'v0.2.0'],
+    }),
+    '0.2.0',
+  );
+});
+
+test('inferLatestReleaseBranchVersion does not pick tags from another release line', () => {
+  assert.equal(
+    inferLatestReleaseBranchVersion({
+      branch: 'release/0.2.x',
+      tags: ['v0.3.0', 'v1.0.0-alpha.0'],
+    }),
+    '',
+  );
 });
 
 test('normalizeBranchRef removes local and origin prefixes', () => {
@@ -183,6 +204,94 @@ test('computeReleasePlan handles release branch transitions', () => {
   assert.equal(planBranchTransition('patch-rc-start', '0.2.0'), '0.2.1-rc.0');
 });
 
+test('computeReleasePlan supports tag-inferred release branch transitions', () => {
+  const common = {
+    baseBranch: 'master',
+    currentBranch: 'release/0.2.x',
+    dryRun: true,
+    releaseBranches: ['release/0.2.x'],
+    releaseBranchVersions: {
+      'release/0.2.x': '0.2.0-alpha.0',
+    },
+    tags: ['v0.1.2', 'v0.2.0-alpha.0'],
+  };
+  const planTagTransition = (action, currentVersion, tags = [`v${currentVersion}`]) =>
+    computeReleasePlan({
+      ...common,
+      action,
+      currentVersion,
+      releaseBranchVersions: {
+        'release/0.2.x': currentVersion,
+      },
+      sourceTags: tags,
+      tags: [...common.tags, ...tags],
+    }).targetVersion;
+
+  assert.equal(planTagTransition('alpha-bump', '0.2.0-alpha.0'), '0.2.0-alpha.1');
+  assert.equal(planTagTransition('promote-rc', '0.2.0-alpha.1'), '0.2.0-rc.0');
+  assert.equal(planTagTransition('rc-bump', '0.2.0-rc.0'), '0.2.0-rc.1');
+  assert.equal(planTagTransition('stable', '0.2.0-rc.1'), '0.2.0');
+  assert.equal(planTagTransition('patch', '0.2.0'), '0.2.1');
+  assert.equal(planTagTransition('patch-alpha-start', '0.2.0'), '0.2.1-alpha.0');
+  assert.equal(planTagTransition('patch-rc-start', '0.2.0'), '0.2.1-rc.0');
+});
+
+test('computeReleasePlan checks duplicate target tags globally when source tags are reachable-only', () => {
+  assert.throws(
+    () =>
+      computeReleasePlan({
+        ...basePlan,
+        action: 'patch',
+        currentBranch: 'release/0.2.x',
+        currentVersion: '0.2.0',
+        releaseBranches: ['release/0.2.x'],
+        releaseBranchVersions: {
+          'release/0.2.x': '0.2.0',
+        },
+        sourceTags: ['v0.2.0'],
+        tags: ['v0.2.0', 'v0.2.1'],
+      }),
+    /Tag already exists: v0\.2\.1/,
+  );
+});
+
+test('computeReleasePlan active prerelease gate ignores stable release branches', () => {
+  const plan = computeReleasePlan({
+    ...basePlan,
+    releaseBranches: ['release/0.1.x'],
+    releaseBranchVersions: {
+      'release/0.1.x': '0.1.2',
+    },
+  });
+
+  assert.equal(plan.targetBranch, 'release/0.2.x');
+});
+
+test('computeReleasePlan rejects patch prerelease starts from master', () => {
+  assert.throws(
+    () =>
+      computeReleasePlan({
+        ...basePlan,
+        action: 'patch-alpha-start',
+        currentBranch: 'master',
+        currentVersion: '0.1.2',
+        tags: ['v0.1.2'],
+      }),
+    /Expected release branch release\/X\.Y\.x/,
+  );
+  assert.throws(
+    () =>
+      computeReleasePlan({
+        ...basePlan,
+        action: 'patch-rc-start',
+        currentBranch: 'master',
+        currentVersion: '0.1.2',
+        tags: ['v0.1.2'],
+      }),
+    /Expected release branch release\/X\.Y\.x/,
+  );
+});
+
 test('computeReleasePlan rejects branch transitions without source tags', () => {
   assert.throws(
     () =>
@@ -220,5 +329,6 @@ test('getReleaseChannel and formatReleasePlanSummary describe the plan', () => {
 
   const summary = formatReleasePlanSummary(computeReleasePlan(basePlan));
   assert.match(summary, /Release train plan/);
+  assert.doesNotMatch(summary, /Current version:/);
   assert.match(summary, /Target version: 0\.2\.0-alpha\.0/);
 });

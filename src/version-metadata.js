@@ -67,9 +67,28 @@ function resolveRepoPath(cwd, relativePath) {
   return path.resolve(cwd, relativePath);
 }
 
-export function updatePackageVersionFiles(cwd, targetVersion) {
-  const packagePath = resolveRepoPath(cwd, 'package.json');
-  const packageLockPath = resolveRepoPath(cwd, 'package-lock.json');
+function packageLockPathFor(cwd, packagePath) {
+  return resolveRepoPath(cwd, path.join(path.dirname(packagePath), 'package-lock.json'));
+}
+
+export function hasPackageMetadata(cwd = process.cwd(), packagePath = 'package.json') {
+  try {
+    return fs.statSync(resolveRepoPath(cwd, packagePath)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function shouldUsePackageMetadata({ cwd, packageMetadata, packagePath }) {
+  if (packageMetadata === 'required') return true;
+  if (packageMetadata === 'optional') return hasPackageMetadata(cwd, packagePath);
+  if (packageMetadata === 'disabled') return false;
+  throw new Error(`Unsupported package metadata mode: ${packageMetadata}`);
+}
+
+export function updatePackageVersionFiles(cwd, targetVersion, packagePath = 'package.json') {
+  const resolvedPackagePath = resolveRepoPath(cwd, packagePath);
+  const packageLockPath = packageLockPathFor(cwd, packagePath);
 
   if (fs.existsSync(packageLockPath)) {
     // Validate before writing anything so a malformed lock does not leave
@@ -80,26 +99,34 @@ export function updatePackageVersionFiles(cwd, targetVersion) {
       throw new Error('package-lock.json does not contain packages[""] root metadata');
     }
 
-    const pkg = readJsonFile(packagePath);
+    const pkg = readJsonFile(resolvedPackagePath);
     pkg.version = targetVersion;
     lock.version = targetVersion;
     lock.packages[''].version = targetVersion;
 
-    writeJsonFile(packagePath, pkg);
+    writeJsonFile(resolvedPackagePath, pkg);
     writeJsonFile(packageLockPath, lock);
   } else {
-    const pkg = readJsonFile(packagePath);
+    const pkg = readJsonFile(resolvedPackagePath);
     pkg.version = targetVersion;
-    writeJsonFile(packagePath, pkg);
+    writeJsonFile(resolvedPackagePath, pkg);
   }
 }
 
-export function applyVersionMetadata({ cwd = process.cwd(), targetVersion, versionFiles = '' }) {
+export function applyVersionMetadata({
+  cwd = process.cwd(),
+  packageMetadata = 'required',
+  packagePath = 'package.json',
+  targetVersion,
+  versionFiles = '',
+}) {
   if (!targetVersion) {
     throw new Error('targetVersion is required');
   }
 
-  updatePackageVersionFiles(cwd, targetVersion);
+  if (shouldUsePackageMetadata({ cwd, packageMetadata, packagePath })) {
+    updatePackageVersionFiles(cwd, targetVersion, packagePath);
+  }
 
   for (const file of splitFileList(versionFiles)) {
     updateJsonVersionFile(resolveRepoPath(cwd, file), targetVersion);
@@ -113,20 +140,29 @@ function assertEqual(label, actual, expected) {
   }
 }
 
-export function validateVersionMetadata({ cwd = process.cwd(), targetVersion, versionFiles = '' }) {
+export function validateVersionMetadata({
+  cwd = process.cwd(),
+  packageMetadata = 'required',
+  packagePath = 'package.json',
+  targetVersion,
+  versionFiles = '',
+}) {
   if (!targetVersion) {
     throw new Error('targetVersion is required');
   }
 
-  const packageLockPath = resolveRepoPath(cwd, 'package-lock.json');
-  const pkg = readJsonFile(resolveRepoPath(cwd, 'package.json'));
+  const packageLockPath = packageLockPathFor(cwd, packagePath);
 
-  assertEqual('package.json version', pkg.version, targetVersion);
+  if (shouldUsePackageMetadata({ cwd, packageMetadata, packagePath })) {
+    const pkg = readJsonFile(resolveRepoPath(cwd, packagePath));
 
-  if (fs.existsSync(packageLockPath)) {
-    const lock = readJsonFile(packageLockPath);
-    assertEqual('package-lock.json version', lock.version, targetVersion);
-    assertEqual('package-lock root version', lock.packages?.['']?.version, targetVersion);
+    assertEqual(`${packagePath} version`, pkg.version, targetVersion);
+
+    if (fs.existsSync(packageLockPath)) {
+      const lock = readJsonFile(packageLockPath);
+      assertEqual('package-lock.json version', lock.version, targetVersion);
+      assertEqual('package-lock root version', lock.packages?.['']?.version, targetVersion);
+    }
   }
 
   for (const file of splitFileList(versionFiles)) {
