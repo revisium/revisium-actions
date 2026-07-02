@@ -291,6 +291,10 @@ test('bootstrap stable workflow and example expose guarded write mode', () => {
   assert.match(workflow, /target_version/);
   assert.match(workflow, /Create release app token/);
   assert.match(workflow, /Fetch release refs/);
+  assert.match(workflow, /owner: \$\{\{ github\.repository_owner \}\}/);
+  assert.match(workflow, /repositories: \$\{\{ github\.event\.repository\.name \}\}/);
+  assert.match(workflow, /FETCH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.doesNotMatch(workflow, /FETCH_TOKEN: \$\{\{ inputs\.dry_run == false && steps\.app-token/);
   assert.match(workflow, /node \.revisium-actions\/bin\/bootstrap-stable\.mjs/);
   assert.match(workflow, /dry_run=false requires RELEASE_BOT_CLIENT_ID/);
   assert.match(example, /bootstrap-stable\.yml@v0\.3\.5/);
