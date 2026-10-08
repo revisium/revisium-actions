@@ -95,14 +95,16 @@ export function updatePackageVersionFiles(cwd, targetVersion, packagePath = 'pac
     // package.json partially modified (atomicity: throw before any write).
     const lock = readJsonFile(packageLockPath);
 
-    if (!lock.packages?.['']) {
+    if (lock.lockfileVersion !== 1 && !lock.packages?.['']) {
       throw new Error('package-lock.json does not contain packages[""] root metadata');
     }
 
     const pkg = readJsonFile(resolvedPackagePath);
     pkg.version = targetVersion;
     lock.version = targetVersion;
-    lock.packages[''].version = targetVersion;
+    if (lock.lockfileVersion !== 1) {
+      lock.packages[''].version = targetVersion;
+    }
 
     writeJsonFile(resolvedPackagePath, pkg);
     writeJsonFile(packageLockPath, lock);
@@ -161,7 +163,9 @@ export function validateVersionMetadata({
     if (fs.existsSync(packageLockPath)) {
       const lock = readJsonFile(packageLockPath);
       assertEqual('package-lock.json version', lock.version, targetVersion);
-      assertEqual('package-lock root version', lock.packages?.['']?.version, targetVersion);
+      if (lock.lockfileVersion !== 1) {
+        assertEqual('package-lock root version', lock.packages?.['']?.version, targetVersion);
+      }
     }
   }
 

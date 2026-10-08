@@ -194,6 +194,15 @@ Write mode requires the caller repository to configure:
 - `RELEASE_BOT_CLIENT_ID` as an Actions variable.
 - `RELEASE_BOT_PRIVATE_KEY` as an Actions secret.
 
+## npm Lockfile Compatibility
+
+Release metadata supports npm lockfile versions 1, 2, and 3. The release helper
+preserves the lockfile format and dependency entries: npm 6 locks update the
+top-level version, while modern locks also update `packages[""].version`.
+Malformed modern locks without root metadata still fail before any package file
+is changed. Caller validation should use the application's declared runtime and
+package manager; release orchestration may use a newer Node.js version.
+
 ## Manual Release
 
 Run these commands from the repository root:

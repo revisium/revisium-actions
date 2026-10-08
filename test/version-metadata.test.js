@@ -261,3 +261,59 @@ test('required package metadata mode still rejects missing package.json', () => 
     /package\.json/,
   );
 });
+
+function legacyPackageFixture() {
+  const cwd = tempDir();
+  const dependencies = {
+    dependency: {
+      version: '1.2.3',
+      resolved: 'https://example.test/dependency.tgz',
+      integrity: 'sha512-fixture',
+    },
+  };
+  writeJson(path.join(cwd, 'package.json'), { name: 'fixture', version: '1.8.0' });
+  writeJson(path.join(cwd, 'package-lock.json'), {
+    name: 'fixture',
+    version: '1.8.0',
+    lockfileVersion: 1,
+    requires: true,
+    dependencies,
+  });
+  return { cwd, dependencies };
+}
+
+test('release metadata updates npm 6 locks without migrating dependencies or format', () => {
+  const { cwd, dependencies } = legacyPackageFixture();
+
+  applyVersionMetadata({ cwd, targetVersion: '1.8.1-alpha.0' });
+  validateVersionMetadata({ cwd, targetVersion: '1.8.1-alpha.0' });
+
+  assert.equal(readJson(path.join(cwd, 'package.json')).version, '1.8.1-alpha.0');
+  assert.deepEqual(readJson(path.join(cwd, 'package-lock.json')), {
+    name: 'fixture',
+    version: '1.8.1-alpha.0',
+    lockfileVersion: 1,
+    requires: true,
+    dependencies,
+  });
+});
+
+test('release metadata validation accepts matching npm 6 locks', () => {
+  const { cwd } = legacyPackageFixture();
+
+  validateVersionMetadata({ cwd, targetVersion: '1.8.0' });
+});
+
+test('release metadata validation rejects mismatched npm 6 locks', () => {
+  const { cwd } = legacyPackageFixture();
+  writeJson(path.join(cwd, 'package-lock.json'), {
+    version: '1.8.1',
+    lockfileVersion: 1,
+    requires: true,
+  });
+
+  assert.throws(
+    () => validateVersionMetadata({ cwd, targetVersion: '1.8.0' }),
+    /package-lock\.json version mismatch/,
+  );
+});
