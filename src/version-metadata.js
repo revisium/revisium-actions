@@ -173,7 +173,7 @@ export function validateVersionMetadata({
   console.log(`tag version: ${targetVersion}`);
 }
 
-export function findPrereleaseRuntimeDependencyViolations(pkg) {
+export function findPrereleaseRuntimeDependencyViolations(pkg, allowedDependencies = []) {
   const violations = [];
 
   for (const section of runtimeDependencySections) {
@@ -181,7 +181,7 @@ export function findPrereleaseRuntimeDependencyViolations(pkg) {
     if (!dependencies) continue;
 
     for (const [name, version] of Object.entries(dependencies)) {
-      if (prereleaseVersionPattern.test(String(version))) {
+      if (prereleaseVersionPattern.test(String(version)) && !allowedDependencies.includes(name)) {
         violations.push(`${section}: ${name}@${version}`);
       }
     }
@@ -197,9 +197,13 @@ export function shouldSkipStableDependencyGuard(targetVersion = '') {
 export function assertNoPrereleaseRuntimeDependencies({
   cwd = process.cwd(),
   packagePath = 'package.json',
+  allowedDependencies = '',
 } = {}) {
   const pkg = readJsonFile(resolveRepoPath(cwd, packagePath));
-  const violations = findPrereleaseRuntimeDependencyViolations(pkg);
+  const violations = findPrereleaseRuntimeDependencyViolations(
+    pkg,
+    splitFileList(allowedDependencies),
+  );
 
   if (violations.length === 0) {
     return;
