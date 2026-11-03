@@ -42,6 +42,11 @@ on:
         required: false
         default: ''
         type: string
+      allowed_prerelease_dependencies:
+        description: Newline-separated runtime dependencies a stable release may keep at a prerelease version.
+        required: false
+        default: ''
+        type: string
       install_command:
         description: Command that installs repository dependencies.
         required: false
@@ -204,6 +209,7 @@ jobs:
 
       - name: Validate stable runtime dependencies
         env:
+          ALLOWED_PRERELEASE_DEPENDENCIES: ${{ inputs.allowed_prerelease_dependencies }}
           PACKAGE_PATH: ${{ inputs.package_path }}
           TARGET_VERSION: ${{ steps.release.outputs.target_version }}
           VERSION_SOURCE: ${{ inputs.version_source }}

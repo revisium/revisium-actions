@@ -24,5 +24,6 @@ if (versionSource !== 'package' && !hasPackageMetadata(process.cwd(), packagePat
 }
 
 assertNoPrereleaseRuntimeDependencies({
+  allowedDependencies: process.env.ALLOWED_PRERELEASE_DEPENDENCIES || '',
   packagePath,
 });

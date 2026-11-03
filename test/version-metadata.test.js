@@ -10,6 +10,7 @@ import {
   getJsonVersion,
   hasPackageMetadata,
   setJsonVersion,
+  assertNoPrereleaseRuntimeDependencies,
   shouldSkipStableDependencyGuard,
   splitFileList,
   updatePackageVersionFiles,
@@ -155,6 +156,40 @@ test('findPrereleaseRuntimeDependencyViolations checks runtime sections only', (
     'peerDependencies: @revisium/engine@0.7.0-rc.1',
     'optionalDependencies: @revisium/payment@~0.2.0-alpha.2',
   ]);
+});
+
+test('stable guard ignores only the prerelease dependencies the caller allows', () => {
+  const cwd = tempDir();
+  writeJson(path.join(cwd, 'package.json'), {
+    dependencies: { '@prisma/orm-postgres': '8.0.0-rc.11', '@revisium/core': '2.10.0-alpha.0' },
+  });
+
+  assert.throws(
+    () =>
+      assertNoPrereleaseRuntimeDependencies({
+        cwd,
+        allowedDependencies: '@prisma/orm-postgres',
+      }),
+    /Found 1 prerelease runtime dependency violation/,
+  );
+  assert.doesNotThrow(() =>
+    assertNoPrereleaseRuntimeDependencies({
+      cwd,
+      allowedDependencies: '@prisma/orm-postgres\n@revisium/core\n',
+    }),
+  );
+});
+
+test('stable guard allows nothing by default', () => {
+  const cwd = tempDir();
+  writeJson(path.join(cwd, 'package.json'), {
+    dependencies: { '@prisma/orm-postgres': '8.0.0-rc.11' },
+  });
+
+  assert.throws(
+    () => assertNoPrereleaseRuntimeDependencies({ cwd }),
+    /Found 1 prerelease runtime dependency violation/,
+  );
 });
 
 test('shouldSkipStableDependencyGuard skips prerelease targets only', () => {

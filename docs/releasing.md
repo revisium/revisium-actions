@@ -116,6 +116,19 @@ initial stable tag such as `v0.0.0` or `v0.1.0` on the base branch. Use
 `version_source: tag` in release train callers for those repositories; start
 actions will treat that stable tag as the version baseline.
 
+## Stable Releases With A Prerelease Dependency
+
+A stable release fails while a runtime dependency is at a prerelease version.
+An application whose image ships that exact version may accept this for named
+packages. Pass them to `release-train.yml`; every other prerelease dependency
+still fails the release:
+
+```yaml
+with:
+  allowed_prerelease_dependencies: |
+    @prisma/orm-postgres
+```
+
 ## When To Cut `v0.1.0`
 
 Cut `v0.1.0` after the initial repository foundation is ready:
